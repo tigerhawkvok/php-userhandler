@@ -17,16 +17,11 @@ Considering replacing the "current" [reCAPTCHA](https://developers.google.com/re
 
 ### Subtrees
 
-- [otphp](https://github.com/Spomky-Labs/otphp) is a subtree in the `totp/` directory. The relevant files are in `totp/lib/OTPHP`. The command to update this is `git subtree pull --prefix totp otphp master --squash`
-- [base32](https://github.com/ChristianRiesen/base32) is a subtree in the `base32/` directory. The relevant files are in `base32/src/Base32/Base32.php`. The command to update this is `git subtree pull --prefix base32 base32 master --squash`
-- [phpqrcode](https://github.com/t0k4rt/phpqrcode) is a subtree in the `qr/` directory. The relevant files are in `qr/qrlib.php`. The command to update this is `git subtree pull --prefix q master --squash`
-
-### Submodules
-
-Submodules have their own dependencies -- see the submodule pages for their included modules. These are updated by calling `git pull origin master` in their directories.
-
-- [php-stronghash](https://github.com/tigerhawkvok/php-stronghash) in the `stronghash/` directory.
-- [php-multioauth](https://github.com/tigerhawkvok/php-multioauth) in the `oauth/` directory. **This is a work in progress and is not yet fully integrated**.
+- [otphp](https://github.com/Spomky-Labs/otphp) is a subtree in the `totp/` directory. The relevant files are in `totp/lib/OTPHP`. The command to update this is `git subtree pull --prefix totp otphp master --squash`. **This is currently frozen at 2.x branch, before the class was made wholly abstract**.
+- [base32](https://github.com/ChristianRiesen/base32) is a subtree in the `base32/` directory. The relevant file is `base32/src/Base32/Base32.php`. The command to update this is `git subtree pull --prefix base32 base32 master --squash`
+- [phpqrcode](https://github.com/t0k4rt/phpqrcode) is a subtree in the `qr/` directory. The relevant file is `qr/qrlib.php`. The command to update this is `git subtree pull --prefix qr qr master --squash`
+- [twilio-php](https://github.com/twilio/twilio-php) is a subtree in the `twilio/` directory. The relevant file is `twilio/Services/Twilio.php`. The command to update this is `git subtree pull --prefix twilio twilio master --squash`
+- [php-stronghash](https://github.com/tigerhawkvok/php-stronghash) is a subtree in the `stronghash/` directory. The relevant file is `stronghash/php-stronghash.php`. The command to update this is `git subtree pull --prefix stronghash php-stronghash master --squash`.
 
 
 ## Server configuration
@@ -52,4 +47,3 @@ This loads a number of libraries asynchronously in `js/loadJQuery.js`. If you en
 The most likely reason for a misbehaving application is something else bound to the document onload handler. Anything you want to be handled on load insert into a function named `lateJS()`, and it will be called by the script.
 
 If you have functions that redraw the screen, and want to force a user to use two-factor authentication, there may be issues. Check for the variable `window.totpParams.tfaLock`; it will be set as `true` when a lock is needed, and you can wrap any redrawing functions in there.
-
