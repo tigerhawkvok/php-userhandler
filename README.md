@@ -17,11 +17,12 @@ Considering replacing the "current" [reCAPTCHA](https://developers.google.com/re
 
 ### Subtrees
 
-- [otphp](https://github.com/Spomky-Labs/otphp) is a subtree in the `totp/` directory. The relevant files are in `totp/lib/OTPHP`. The command to update this is `git subtree pull --prefix totp otphp master --squash`. **This is currently frozen at 2.x branch, before the class was made wholly abstract**.
+- [otphp](https://github.com/tigerhawkvok/otphp) is a subtree in the `totp/` directory. The relevant files are in `totp/lib/OTPHP`. The command to update this is `git subtree pull --prefix totp otphp master --squash`. It is a fork from [Spomky Labs](https://github.com/Spomky-Labs/otphp) frozen at the 2.0.x branch, before it was made abstract.
 - [base32](https://github.com/ChristianRiesen/base32) is a subtree in the `base32/` directory. The relevant file is `base32/src/Base32/Base32.php`. The command to update this is `git subtree pull --prefix base32 base32 master --squash`
 - [phpqrcode](https://github.com/t0k4rt/phpqrcode) is a subtree in the `qr/` directory. The relevant file is `qr/qrlib.php`. The command to update this is `git subtree pull --prefix qr qr master --squash`
 - [twilio-php](https://github.com/twilio/twilio-php) is a subtree in the `twilio/` directory. The relevant file is `twilio/Services/Twilio.php`. The command to update this is `git subtree pull --prefix twilio twilio master --squash`
 - [php-stronghash](https://github.com/tigerhawkvok/php-stronghash) is a subtree in the `stronghash/` directory. The relevant file is `stronghash/php-stronghash.php`. The command to update this is `git subtree pull --prefix stronghash php-stronghash master --squash`.
+- [zxcvbn](https://github.com/dropbox/zxcvbn) is a subtree in the `js/zxcvbn` directory. The relevant file is `js/zxcvbn/zxcvbn.js`. The command to update this is `git subtree pull --prefix js/zxcvbn zxcvbn master --squash`.
 
 
 ## Server configuration
