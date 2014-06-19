@@ -1,10 +1,11 @@
 <?php
-/*
- * This is designed to be included in a page, and doesn't have the page framework on its own.
+/***
+ * This is designed to be included in a page, and doesn't have the
+ * page framework on its own. 
  * Be sure after including this file to output the variable
- * $login_output
- * If you want a display
- */
+ *   $login_output
+ * If you want a display!
+ ***/
 
 require_once(dirname(__FILE__).'/CONFIG.php');
 
@@ -37,9 +38,15 @@ if(empty($baseurl))
     $baseurl.=$_SERVER['HTTP_HOST'];
   }
 
-$base=array_slice(explode(".",$baseurl),-2);
-$domain=$base[0];
-$shorturl=implode(".",$base);
+$base_long = str_replace("http://","",strtolower($baseurl));
+$base_long = str_replace("https://","",strtolower($base_long));
+$base_arr = explode("/",$base_long);
+$base = $base_arr[0];
+$url_parts = explode(".",$base);
+$tld = array_pop($url_parts);
+$domain = array_pop($url_parts);
+$shorturl = $domain . "." . $tld;
+
 
 if(!is_numeric($minimum_password_length)) $minimum_password_length=8;
 if(!is_numeric($password_threshold_length)) $password_threshold_length=20;

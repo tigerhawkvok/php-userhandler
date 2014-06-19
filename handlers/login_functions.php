@@ -116,8 +116,17 @@ class UserFunctions extends DBHelper
         $baseurl .= "://www.";
         $baseurl.=$_SERVER['HTTP_HOST'];
       }
-    $base=array_slice(explode(".",$baseurl),-2);
-    $domain=$base[0];
+
+    # Get the domain and tld
+    
+    $base_long = str_replace("http://","",strtolower($baseurl));
+    $base_long = str_replace("https://","",strtolower($base_long));
+    $base_arr = explode("/",$base_long);
+    $base = $base_arr[0];
+    $url_parts = explode(".",$base);
+    $tld = array_pop($url_parts);
+    $domain = array_pop($url_parts);
+    $shorturl = $domain . "." . $tld;
 
     $this->domain = $domain;
 
@@ -146,6 +155,8 @@ class UserFunctions extends DBHelper
 
   private function getSiteKey() { return $this->siteKey; }
   public function getSiteName() { return $this->site; }
+  public function getDomain() { return $this->domain; }
+  
   private function getMinPasswordLength() { return $this->minPasswordLength; }
   private function getThresholdLength() { return $this->thresholdLength; }
   private function getSupportEmail() { return $this->supportEmail; }
@@ -258,6 +269,12 @@ class UserFunctions extends DBHelper
   {
     $userdata = $this->getUser();
     return self::cleanPhone($userdata["phone"]);
+  }
+
+  public function hasPhone()
+  {
+    $userdata = $this->getUser();
+    return self::isValidPhone($userdata["phone"]);
   }
 
   private function getDigest()
@@ -747,7 +764,7 @@ class UserFunctions extends DBHelper
      ***/
     if(strlen($pw_in)>8192)
       {
-        throw(new Exception("Passwords must be less than 8192 characters in length."));
+        return array("status"=>false,"error"=>"Passwords must be less than 8192 characters in length.");
       }
     // Send email for validation
     $ou=$username;
