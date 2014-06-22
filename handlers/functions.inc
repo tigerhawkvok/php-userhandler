@@ -1,6 +1,5 @@
 <?php
 
-require_once(dirname(__FILE__).'/crypt_functions.php');
 require_once(dirname(__FILE__).'/xml.php');
 
 if(!function_exists('curPageURL'))

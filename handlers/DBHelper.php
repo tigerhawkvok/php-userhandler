@@ -18,7 +18,7 @@ class DBHelper {
      * @param string $table the default table
      ***/
     $this->db = $database;
-    $this->user = $user;
+    $this->SQLuser = $user;
     $this->pw = $pw;
     $this->url = $url;
     $this->table = $table;

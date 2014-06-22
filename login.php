@@ -236,7 +236,7 @@ if($_REQUEST['q']=='submitlogin')
   <form id='totp_submit' onsubmit='event.preventDefault();'>
     <fieldset>
       <legend>Two-Factor Authentication</legend>
-      <input type='number' id='totp_code' name='totp_code' placeholder='Code' size='6' maxlength='6'/>
+      <input type='number' id='totp_code' name='totp_code' placeholder='Code' pattern='[0-9]{6}' size='6' maxlength='6'/>
       <input type='hidden' id='username' name='username' value='".$_POST['username']."'/>
       <input type='hidden' id='password' name='password' value='".$res["encrypted_password"]."'/>
       <input type='hidden' id='secret' name='secret' value='".$secret."'/>
