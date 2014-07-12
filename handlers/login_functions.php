@@ -118,7 +118,7 @@ class UserFunctions extends DBHelper
       }
 
     # Get the domain and tld
-    
+
     $base_long = str_replace("http://","",strtolower($baseurl));
     $base_long = str_replace("https://","",strtolower($base_long));
     $base_arr = explode("/",$base_long);
@@ -129,6 +129,12 @@ class UserFunctions extends DBHelper
     $shorturl = $domain . "." . $tld;
 
     $this->domain = $domain;
+    $this->shortUrl = $shorturl;
+    
+    $proto = 'http';
+    if ($_SERVER["HTTPS"] == "on") {$proto .= "s";}
+    
+    $this->qualDomain = $proto . "://" . $shorturl;
 
     # Let's be nice and try to set up a user
     try
@@ -156,7 +162,8 @@ class UserFunctions extends DBHelper
   private function getSiteKey() { return $this->siteKey; }
   public function getSiteName() { return $this->site; }
   public function getDomain() { return $this->domain; }
-  
+  public function getQualifiedDomain() { return $this->qualDomain; }
+  public function getShortUrl() { return $this->shortUrl; }
   private function getMinPasswordLength() { return $this->minPasswordLength; }
   private function getThresholdLength() { return $this->thresholdLength; }
   private function getSupportEmail() { return $this->supportEmail; }
@@ -489,7 +496,7 @@ class UserFunctions extends DBHelper
         $uri = $totp->getProvisioningURI($label,$provider);
         # iPhones don't actually accept the full, valid URI
         $unsafe_uri = urldecode($uri);
-        $uri_args = explode("?",$unsafe_uri);          
+        $uri_args = explode("?",$unsafe_uri);
         $iphone_uri = $uri_args[0]."?";
         $iphone_args = array();
         $iphone_safe_args = array("secret","issuer");
@@ -862,11 +869,10 @@ class UserFunctions extends DBHelper
         $userdata=$res[1];
         $id=$userdata['id'];
 
-        if($this->needsManualAuth()) requireUserAuth();
-
         if (is_numeric($id) && !empty($userdata))
           {
             $this->getUser(array("id"=>$id));
+            if($this->needsManualAuth()) requireUserAuth($user);
             $cookies=$this->createCookieTokens();
 
             return array_merge(array("status"=>true,"message"=>'Success!'),$userdata,$cookies);
@@ -1143,7 +1149,7 @@ class UserFunctions extends DBHelper
           }
         $id=$userdata['id'];
         $dblink = $userdata[$this->linkcol];
-        
+
         # Nom, cookies!
         $expire_days=7;
         $expire=time()+3600*24*$expire_days;
@@ -1352,6 +1358,121 @@ class UserFunctions extends DBHelper
      ***/
   }
 
+
+
+  public function confirmUser()
+  {
+    /***
+     * Confirm the user and toggle the flog
+     ***/
+  }
+
+  public function getAuthTokens($target_user = null,$secret_key = null)
+  {
+    /***
+     * Get the authorization key for this user
+     *
+     * @param array target_user set the target user with 'col'=>'val'
+     * @param string secret_key set the secret key, if desired
+     * @return array with the used secret key in "secret", and result
+     * in "auth"
+     ***/
+
+    $userdata = $this->getUser($target_user);
+    if(!$userdata['flag']) return false;
+    # The user needs it, let's make one
+    $return = array();
+    $userString = $userdata['creation'] . $this->getUsername();
+    # We'll use a secret key that is never kept on the server
+    if(empty($secret_key))
+      {
+        require_once(dirname(__FILE__).'/../stronghash/php-stronghash.php');
+        $secret_key = Stronghash::createSalt(strlen($userString));        
+      }
+    $return['secret'] = $secret_key;
+    $auth_code = $secret_key ^ $userString;
+    $auth_result = sha1($auth_code);
+    $return['auth'] = $auth_result;
+    $return['user'] = $userdata[$this->linkcol];
+    return $return;
+    
+  }
+
+  public function requireUserAuth($user_email)
+  {
+    /***
+     * Set up the flags and verification tokens to disable a user until the authorization flag is passed
+     * Note that if this function fails, the user is still
+     * flagged. The flag must be clared manually.
+     *
+     * If you're using Amazon AWS, see this:
+     * http://docs.aws.amazon.com/ses/latest/DeveloperGuide/verify-domains.html
+     *
+     * @param string $user_email User identifier
+     * @return array
+     ***/
+    # Look at the 'flag' item
+    $components = getAuthTokens();
+    $link = $this->getQualifiedDomain() . "login.php?token=".$components['auth']."&user=".$components['user']."&key=";
+    # get all the administrative users, and encrypt the key with their
+    # user DB link
+    $email='blackhole@'.$this->getShortUrl();
+    $headers  = 'MIME-Version: 1.0' . "\r\n";
+    $headers .= 'Content-type: text/html; charset=iso-8859-1' . "\r\n";
+    $headers .= "From: ".$this->getDomain()." New User Bot <$email>";
+    $subject="[".$this->getDomain()."] New User - Authentication Needed";
+    $success = false;
+    # Loop through all the admins ....
+    $l = $this->openDB();
+    $query = "SELECT `".$this->usercol."`, `".$this->linkcol."` FROM ".$this->getTable()." WHERE `admin_flag`=TRUE";
+    $r = mysqli_query($l,$query);
+    $i = 0;
+    if ($r === false)
+      {
+        return array("status"=>false,"error"=>"No valid administrators to use this function");
+      }
+    while ($row=mysql_fetch_row($r))
+      {
+        $to = $row[0];
+        $dblink = $row[1];
+        $encoded_key = urlencode(self::encryptThis($dblink,$components['secret']));
+        $admin_link = $link . $encoded_key;
+        $body="<p>".$user_email." is requesting access to ".$this->getDomain().".</p><p>To authorize them, clik this link:</p><p><a href='".$admin_link."'>Click here to authorize ".$user_email."</a></p><p>Thank you.</p>";
+        # If this works even once, we want to tell the user it worked
+        if(mail($to,$subject,$body,$headers))
+          {
+            $success = true;
+            $i++;
+          }
+      }
+    return array("status"=>$success,"emails_sent"=>$i);
+
+  }
+
+  public function verifyUserAuth($encoded_key,$token,$target_user)
+  {
+    /***
+     * If a user needs to be authorized before being allowed access,
+     * check the authorization token here and update the flag
+     * Note that the user calling this themselves must be an
+     * administrator, or the function will fail.
+     *
+     ***/
+    $target_user = array($this->linkcol => $target_user);
+    $userdata = $this->getUser($target_user);
+    # Is the user already authorized?
+    if($userdata['flag']) return true;
+    $key = self::decryptThis($userdata[$this->linkcol],urldecode($encoded_key));
+    $components = getAuthTokens($target_user,$key);
+    $primary_token = $components['auth'];
+    if ($primary_token != $token) return false;
+    $l = $this->openDB();
+    $query = "UPDATE `".$this->getTable()."` SET `flag`=FALSE WHERE `".$this->linkcol."`='".$target_user."'";
+    return mysqli_query($l,$query);
+    
+  }
+
+
   public function textUser($message,$strict = true)
   {
     /***
@@ -1470,51 +1591,6 @@ class UserFunctions extends DBHelper
     return array("status"=>true,"message"=>"Check your phone for your authorization code.","twilio"=>$obj);
   }
 
-  public function confirmUser()
-  {
-    /***
-     * Confirm the user and toggle the flog
-     ***/
-  }
-
-  public function requireUserAuth()
-  {
-    /***
-     * Set up the flags and verification tokens to disable a user until the authorization flag is passed
-     * The user calling this function themselves needs an admin flag and must be logged in.
-     ***/
-    // $store=array($user,$pw_store,'',$creation,'',$names,true,false,false,false,0,'','','',$data_init,$sdata_init,'','',$hardlink,'','',''); // set flag to FALSE if authentication wanted.
-    /* Uncomment if authentication has been requested */
-    /*
-    // Create hash - user + encrypted name + salt
-    $ne=$ne[0];
-    $hash=sha1($user.$ne.$salt);
-    $validlink=$baseurl."/login.php?confirm=$hash&amp;token=$creation&amp;lookup=$id";
-    $affix="&amp;email=".htmlentities($email_in);
-    $validlink.=$affix;
-    // email
-    $email='blackhole@'.$this->domain;
-    $to='admin@'.$this->domain;
-    $headers  = 'MIME-Version: 1.0' . "\r\n";
-    $headers .= 'Content-type: text/html; charset=iso-8859-1' . "\r\n";
-    $headers .= "From: $name (via $this->domain) <$email>";
-    $subject="[User Signup] New User - $name";
-    $body="<p>$name is requesting access to files for $title. You can click the following link to enable access to the files, and click the link later to disable access.</p>\n<p><a href='$validlink'>$validlink</a><p>\n<p>Thank you. For debugging purposes, the user was hashed with $algo.</p>";
-    if(mail($to,$subject,$body,$headers))
-    {
-    //mail($this->supportEmail,$subject,$body,$headers); // debugging confirmation
-    return array(true,"Success! You will receive confirmation when your account has been activated.");
-    }
-    */
-  }
-
-  public function verifyUserAuth()
-  {
-    /***
-     * If a user needs to be authorized before being allowed access,
-     * check the authorization token here and update the flag
-     ***/
-  }
 
   public static function encryptThis($key,$string)
   {
