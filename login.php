@@ -629,53 +629,18 @@ else if($_REQUEST['q'] == "verify")
   }
 else if(isset($_REQUEST['confirm']))
   {
-    ############## Rewrite this to use the built in object methods
-    // toggle user flag
-    $id=$_REQUEST['lookup'];
-    $result=lookupItem($id,'id',null,null,false);
-    if($result!==false)
+    $token = $_REQUEST['token'];
+    $userToActivate = $_REQUEST['user'];
+    $encoded_key = $_REQUEST['key'];
+    $result = $user->verifyUserAuth($encoded_key,$token,$userToActivate);
+    if($result['status'] === false)
       {
-        $userdata=mysqli_fetch_assoc($result);
-        //  $fields=array('username','pass','creation','salt','name','flag');
-        $user=$userdata['username'];
-        $ne=$userdata['name'];
-        $salt=$userdata['salt'];
-        $creation=$userdata['creation'];
-        $hash=sha1($user.$ne.$salt);
-        if($_REQUEST['token']==$creation && $_REQUEST['confirm']==$hash)
-          {
-            if($userdata['flag'])
-              {
-                $flag=0;
-                $status='deactivated';
-              }
-            else
-              {
-                $flag=1;
-                $status='activated';
-
-              }
-            $query="UPDATE `$default_user_table` SET flag=$flag WHERE id=$id";
-            $l=openDB();
-            $result=execAndCloseDB($l,$query);
-            if(!$result) $login_output.="<p class='error'>" . mysqli_error($l) . "</p>";
-            else
-              {
-                $login_output.="<p>Success! User $status</p>";
-                $email=sanitize($_REQUEST['email']);
-                $subject='$title account activated';
-                $body="<p>This is a notice from $title to let you know your account has been $status.";
-                if($status=='activated') $body.=" You may now <a href='".$baseurl."/'>log in here</a></p><p>Thanks!</p>";
-                $headers  = 'MIME-Version: 1.0' . "\r\n";
-                $headers .= 'Content-type: text/html; charset=iso-8859-1' . "\r\n";
-                $headers .= "From: $title <blackhole@".substr($baseurl,strpos($baseurl,'.')).">";
-                if(mail($email,$subject,$body,$headers)) echo "<p>Additionally, an email was sent to '$email' notifying them of their activation.</p>";
-                else $login_output.="<p class='error'>Notice: email notification of activation failed. Please manually notify $email about their activation.</p>";
-              }
-          }
-        else $login_output.="<p class='error'>Invalid user confirmation code.</p>";
+        $login_output .= "<h1 class='error'>Could not verify user</h1><p>".$result['message']."</p>";
       }
-    else $login_output.="<p class='error'>Invalid user ID</p>";
+    else
+      {
+        $login_output .= "<p>The user was successfully activated. Check your inbox for a confirmation.</p>";
+      }
   }
 else if(isset($_REQUEST['2fa']))
   {
