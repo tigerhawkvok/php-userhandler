@@ -167,7 +167,28 @@ class UserFunctions extends DBHelper
   private function getMinPasswordLength() { return $this->minPasswordLength; }
   private function getThresholdLength() { return $this->thresholdLength; }
   private function getSupportEmail() { return $this->supportEmail; }
-  private function needsManualAuth() { return $this->needsAuth === true; }
+  public function needsManualAuth() { return $this->needsAuth === true; }
+  private function getMailObject()
+  {
+    require_once(dirname(__FILE__)."/../PHPMailer/PHPMailerAutoload.php");
+    require_once(dirname(__FILE__).'/../CONFIG.php');
+    global $is_smtp,$mail_host,$mail_user,$mail_password,$is_pop3;
+    $mail = new PHPMailer;
+    if($is_smtp)
+      {
+        $mail->isSMTP();
+        $mail->SMTPAuth = true;
+        $mail->Host = $mail_host;
+        $mail->Username = $mail_user;
+        $mail->Password = $mail_password;
+        $mail->SMTPSecure = "tls";
+      }
+    if($is_pop3) $mail->isPOP3(); # Need to expand this
+    $mail->From = 'blackhole@'.$this->getShortUrl();
+    $mail->FromName = $this->getDomain()." Mailer Bot";
+    $mail->isHTML(true);
+    return $mail;
+  }
   private function getSecret($is_test = false)
   {
     $userdata = $this->getUser();
@@ -785,7 +806,7 @@ class UserFunctions extends DBHelper
     if(preg_match($preg,$username)!=1 || strlen($username) > 100) return array("status"=>false,"error"=>'Your email is not a valid email address. Please try again.');
     else $username=$user; # synonymize
 
-    if(strlen($name) > 100 || strlen($dname) > 100)
+    if(strlen(implode(" ",$name)) > 200 || strlen($dname) > 100)
       {
         return array("status"=>false,"error"=>"Your name must be less than 100 characters.");
       }
@@ -865,24 +886,30 @@ class UserFunctions extends DBHelper
       {
         # Get ID value
         # The TOTP column has never been set up, so no worries
-        $res = $this->lookupUser($user, $pw_in);
+        # We do want to set the override, though, in case the manual
+        # authentication flag has been set.
+        $res = $this->lookupUser($user, $pw_in,true,false,true);
         $userdata=$res[1];
         $id=$userdata['id'];
 
         if (is_numeric($id) && !empty($userdata))
           {
             $this->getUser(array("id"=>$id));
-            if($this->needsManualAuth()) requireUserAuth($user);
+            $auth_result = array();
+            if($this->needsManualAuth())
+              {
+                $auth_result = $this->requireUserAuth($user);
+              }
             $cookies=$this->createCookieTokens();
 
-            return array_merge(array("status"=>true,"message"=>'Success!'),$userdata,$cookies);
+            return array_merge(array("status"=>true,"message"=>'Success!'),$userdata,$cookies,$auth_result);
           }
         else return array("status"=>false,"error"=>'Failure: Unable to verify user creation',"add"=>$test_res,"userdata"=>$userdata);
       }
     else return array("status"=>false,"error"=>'Failure: unknown database error. Your user was unable to be saved.');
   }
 
-  public function lookupUser($username,$pw,$return=true,$totp_code=false)
+  public function lookupUser($username,$pw,$return=true,$totp_code=false,$override = false)
   {
     if(strlen($pw_in)>8192)
       {
@@ -959,7 +986,7 @@ class UserFunctions extends DBHelper
                           }
                       }
 
-                    if($userdata['flag'] && !$userdata['disabled'])
+                    if(($userdata['flag'] || $override) && !$userdata['disabled'])
                       {
                         # This user is OK and not disabled, nor pending validation
                         if(!$return)
@@ -993,7 +1020,7 @@ class UserFunctions extends DBHelper
                             else
                               {
                                 // Clear login disabled flag
-                                $query1="UPDATE `".$this->getTable()."` SET disabled=false WHERE id=".$userdata['id'];
+                                $query1="UPDATE `".$this->getTable()."` SET `disabled`=false WHERE `id`=".$userdata['id'];
                                 $l=$this->openDB();
                                 $result=mysqli_query($l,$query1);
                               }
@@ -1404,40 +1431,55 @@ class UserFunctions extends DBHelper
      * @return array
      ***/
     # Look at the 'flag' item
-    $components = getAuthTokens();
-    $link = $this->getQualifiedDomain() . "login.php?token=".$components['auth']."&user=".$components['user']."&key=";
+    $components = $this->getAuthTokens();
+    $link = $this->getQualifiedDomain() . "login.php?confirm=true&token=".$components['auth']."&user=".$components['user']."&key=";
     # get all the administrative users, and encrypt the key with their
     # user DB link
-    $email='blackhole@'.$this->getShortUrl();
-    $headers  = 'MIME-Version: 1.0' . "\r\n";
-    $headers .= 'Content-type: text/html; charset=iso-8859-1' . "\r\n";
-    $headers .= "From: ".$this->getDomain()." New User Bot <$email>";
-    $subject="[".$this->getDomain()."] New User - Authentication Needed";
+
+    $mail = $this->getMailObject();
+    $mail->Subject = "[".$this->getDomain()."] New User - Authentication Needed";
     $success = false;
     # Loop through all the admins ....
     $l = $this->openDB();
     $query = "SELECT `".$this->usercol."`, `".$this->linkcol."` FROM ".$this->getTable()." WHERE `admin_flag`=TRUE";
     $r = mysqli_query($l,$query);
     $i = 0;
+    $j = 0;
     if ($r === false)
       {
         return array("status"=>false,"error"=>"No valid administrators to use this function");
       }
-    while ($row=mysql_fetch_row($r))
+    $errors = array();
+    $destinations = array();
+    while ($row=mysqli_fetch_row($r))
       {
         $to = $row[0];
+        $destinations[] = $to;
         $dblink = $row[1];
         $encoded_key = urlencode(self::encryptThis($dblink,$components['secret']));
         $admin_link = $link . $encoded_key;
+        $mailcopy = $mail;
         $body="<p>".$user_email." is requesting access to ".$this->getDomain().".</p><p>To authorize them, clik this link:</p><p><a href='".$admin_link."'>Click here to authorize ".$user_email."</a></p><p>Thank you.</p>";
+        $mailcopy->Body = $body;
+        $mailcopy->addAddress($to);
         # If this works even once, we want to tell the user it worked
-        if(mail($to,$subject,$body,$headers))
+        if($mailcopy->send())
           {
-            $success = true;
+            if($success === false) $success = true;
             $i++;
           }
+        else
+          {
+            $errors[$to] = $mailcopy->ErrorInfo;
+            $lasterror = $mailcopy->ErrorInfo;
+          }
+        $j++;
       }
-    return array("status"=>$success,"emails_sent"=>$i);
+    if(sizeof($destinations) == 0)
+      {
+        $errors = array("message"=>"No valid destinations","query"=>$query,"rows"=>mysqli_num_rows($r));
+      }
+    return array("status"=>$success,"mailer"=>array("emails_sent"=>$i,"attempts_made"=>$j,"errors"=>$errors,"destinations"=>$destinations,"last_error"=>$lasterror));
 
   }
 
@@ -1462,7 +1504,7 @@ class UserFunctions extends DBHelper
         $ret['message'] = "Already authenticated";
       }
     $key = self::decryptThis($userdata[$this->linkcol],urldecode($encoded_key));
-    $components = getAuthTokens($target_user,$key);
+    $components = $this->getAuthTokens($target_user,$key);
     $primary_token = $components['auth'];
     if ($primary_token != $token)
       {
@@ -1470,7 +1512,7 @@ class UserFunctions extends DBHelper
         $ret['message'] = "Bad token";
       }
     $l = $this->openDB();
-    $query = "UPDATE `".$this->getTable()."` SET `flag`=FALSE WHERE `".$this->linkcol."`='".$target_user."'";
+    $query = "UPDATE `".$this->getTable()."` SET `flag`=TRUE WHERE `".$this->linkcol."`='".$target_user."'";
     $r = mysqli_query($l,$query);
     if($r === false)
       {
@@ -1479,30 +1521,33 @@ class UserFunctions extends DBHelper
         $ret['error'] = mysqli_error($l);
       }
     $ret['status'] = true;
-
-    $email='blackhole@'.$this->getShortUrl();
-    $headers  = 'MIME-Version: 1.0' . "\r\n";
-    $headers .= 'Content-type: text/html; charset=iso-8859-1' . "\r\n";
-    $headers .= "From: ".$this->getDomain()." New User Bot <$email>";
+    $mail = $this->getMailObject();
+    
     # Let the user know
-    $subject = "Authorization granted to ".$this->getDomain();
-    $body = "<p>Your access to ".$this->getDomain()." as been enabled. <a href='".$this->getQualifiedDomain()."'>Click here to visit the site</a>.";
-    mail($userdata[$this->usercol],$subject,$body,$headers);
+    $mail->Subject = "Authorization granted to ".$this->getDomain();
+    $mail->Body = "<p>Your access to ".$this->getDomain()." as been enabled. <a href='".$this->getQualifiedDomain()."'>Click here to visit the site</a>.";
+    $userMail = $mail;
+    $userMail->addAddress($userdata[$this->usercol]);
+    $userMail->send();
     # Send out an email to admins saying that they've been authorized.
     $query = "SELECT `".$this->usercol."` FROM ".$this->getTable()." WHERE `admin_flag`=TRUE";
     $r = mysqli_query($l,$query);    
-    $subject="[".$this->getDomain()."] New User Authenticated";
-    $i = 0;
-    $j = 0;
-    while ($row=mysql_fetch_row($r))
+    $mail->Subject = "[".$this->getDomain()."] New User Authenticated";
+    $mail->Body = "<p>".$user_email." was granted access to ".$this->getDomain()." by ".$thisUserEmail.".</p><p>No further action is required, and you can disregard emails asking to grant this user access.</p><p><strong>If you believe this to be in error, immediately take steps to take your site offline</strong></p>";
+    while ($row=mysqli_fetch_row($r))
       {
         $to = $row[0];
-        $body="<p>".$user_email." was granted access to ".$this->getDomain()." by ".$thisUserEmail.".</p><p>No further action is required, and you can disregard emails asking to grant this user access.</p><p><strong>If you believe this to be in error, immediately take steps to take your site offline</strong></p>";
-        if(mail($to,$subject,$body,$headers)) $i++;
-        $j++;
+        $mail->addAddress($to);
       }
-    $ret['admin_users'] = $j;
-    $ret['emails_set'] = $i;
+    if($mail->send())
+      {
+        $ret['admin_confirm_sent'] = true;
+      }
+    else
+      {
+        $ret['admin_confirm_sent'] = false;
+        $ret['error'] = $mail->ErrorInfo;
+      }
     return $ret;
     
   }

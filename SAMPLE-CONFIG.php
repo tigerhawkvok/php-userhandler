@@ -71,6 +71,11 @@ $profile_picture_storage = $user_data_storage.'';
  ***/
 
 $needs_manual_authentication = false;
+$is_smtp = false;
+$is_pop3 = false;
+$mail_host = "";
+$mail_user = "";
+$mail_password = "";
 
 
 /***

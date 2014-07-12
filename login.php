@@ -532,6 +532,10 @@ else if($_REQUEST['q']=='create')
                             if($res["status"])
                               {
                                 $login_output.="<h3>".$res["message"]."</h3>"; //jumpto1
+                                if($user->needsManualAuth())
+                                  {
+                                    $login_output.="<p>Your ability to login will be restricted until you've been authorized.</p>";
+                                  }
                                 // email user
                                 $to=$_POST['username'];
                                 $headers  = 'MIME-Version: 1.0' . "\r\n";
