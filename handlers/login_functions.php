@@ -891,7 +891,7 @@ class UserFunctions extends DBHelper
         $res = $this->lookupUser($user, $pw_in,true,false,true);
         $userdata=$res[1];
         $id=$userdata['id'];
-
+        $message = "Success!";
         if (is_numeric($id) && !empty($userdata))
           {
             $this->getUser(array("id"=>$id));
@@ -899,10 +899,14 @@ class UserFunctions extends DBHelper
             if($this->needsManualAuth())
               {
                 $auth_result = $this->requireUserAuth($user);
+                if($auth_result['mailer']['emails_sent'] != $auth_result['mailer']['attempts_made'])
+                  {
+                    $message .= "<br/><small>Not all authentication validation emails could be sent, so please be sure to notify <a href='mailto:".$this->getSupportEmail()."?subject=Manual%20Validation'>email support with a description of this error</a> from the same email address you used to sign up.</small>";
+                  }
               }
             $cookies=$this->createCookieTokens();
 
-            return array_merge(array("status"=>true,"message"=>'Success!'),$userdata,$cookies,$auth_result);
+            return array_merge(array("status"=>true,"message"=>$message),$userdata,$cookies,$auth_result);
           }
         else return array("status"=>false,"error"=>'Failure: Unable to verify user creation',"add"=>$test_res,"userdata"=>$userdata);
       }
@@ -1454,6 +1458,12 @@ class UserFunctions extends DBHelper
     while ($row=mysqli_fetch_row($r))
       {
         $to = $row[0];
+        if(!empty($to))
+          {
+            # If there are valid admins, we want to say it succeeded
+            # whether or not it did
+            $success = true;
+          }
         $destinations[] = $to;
         $dblink = $row[1];
         $encoded_key = urlencode(self::encryptThis($dblink,$components['secret']));
@@ -1465,7 +1475,7 @@ class UserFunctions extends DBHelper
         # If this works even once, we want to tell the user it worked
         if($mailcopy->send())
           {
-            if($success === false) $success = true;
+            # if($success === false) $success = true;
             $i++;
           }
         else
