@@ -782,15 +782,15 @@ class UserFunctions extends DBHelper
     ***/
     $user=$this->sanitize($username);
     $preg="/[a-z0-9!#$%&'*+=?^_`{|}~-]+(?:\.[a-z0-9!#$%&'*+=?^_`{|}~-]+)*@(?:[a-z0-9](?:[a-z0-9-]*[a-z0-9])?\.)+(?:[a-z]{2}|com|org|net|edu|gov|mil|biz|info|mobi|name|aero|asia|jobs|museum)\b/";
-    /***
-     * Uncomment the next line if strict username comparison is needed.
-     * Sometimes special characters may be escaped and be OK, so this is left commented out by default.
-     ***/
-    //if($user!=$username) return array(false,'Your chosen email contained injectable code. Please try again.');
-    if(preg_match($preg,$username)!=1) return array("status"=>false,"error"=>'Your email is not a valid email address. Please try again.');
-    else $username=$user; // synonymize
+    if(preg_match($preg,$username)!=1 || strlen($username) > 100) return array("status"=>false,"error"=>'Your email is not a valid email address. Please try again.');
+    else $username=$user; # synonymize
 
-    $result=$this->lookupItem($user,$this->usercol); #fase,true
+    if(strlen($name) > 100 || strlen($dname) > 100)
+      {
+        return array("status"=>false,"error"=>"Your name must be less than 100 characters.");
+      }
+
+    $result=$this->lookupItem($user,$this->usercol);
     if($result!==false)
       {
         $data=mysqli_fetch_assoc($result);
@@ -1359,14 +1359,6 @@ class UserFunctions extends DBHelper
   }
 
 
-
-  public function confirmUser()
-  {
-    /***
-     * Confirm the user and toggle the flog
-     ***/
-  }
-
   public function getAuthTokens($target_user = null,$secret_key = null)
   {
     /***
@@ -1458,17 +1450,55 @@ class UserFunctions extends DBHelper
      * administrator, or the function will fail.
      *
      ***/
+    $ret = array();
+    $thisUserdata = $this->getUser();
+    $thisUserEmail = $thisUserdata[$this->usercol];
     $target_user = array($this->linkcol => $target_user);
     $userdata = $this->getUser($target_user);
     # Is the user already authorized?
-    if($userdata['flag']) return true;
+    if($userdata['flag'])
+      {
+        $ret['status'] = true;
+        $ret['message'] = "Already authenticated";
+      }
     $key = self::decryptThis($userdata[$this->linkcol],urldecode($encoded_key));
     $components = getAuthTokens($target_user,$key);
     $primary_token = $components['auth'];
-    if ($primary_token != $token) return false;
+    if ($primary_token != $token)
+      {
+        $ret['status'] = false;
+        $ret['message'] = "Bad token";
+      }
     $l = $this->openDB();
     $query = "UPDATE `".$this->getTable()."` SET `flag`=FALSE WHERE `".$this->linkcol."`='".$target_user."'";
-    return mysqli_query($l,$query);
+    $r = mysqli_query($l,$query);
+    if($r === false)
+      {
+        $ret['status'] = false;
+        $ret['message'] = "MySQL error";
+        $ret['error'] = mysqli_error($l);
+      }
+    $ret['status'] = true;
+    # Send out an email to admins saying that they've been authorized.
+    $query = "SELECT `".$this->usercol."` FROM ".$this->getTable()." WHERE `admin_flag`=TRUE";
+    $r = mysqli_query($l,$query);
+    $email='blackhole@'.$this->getShortUrl();
+    $headers  = 'MIME-Version: 1.0' . "\r\n";
+    $headers .= 'Content-type: text/html; charset=iso-8859-1' . "\r\n";
+    $headers .= "From: ".$this->getDomain()." New User Bot <$email>";
+    $subject="[".$this->getDomain()."] New User Authenticated";
+    $i = 0;
+    $j = 0;
+    while ($row=mysql_fetch_row($r))
+      {
+        $to = $row[0];
+        $body="<p>".$user_email." was granted access to ".$this->getDomain()." by ".$thisUserEmail.".</p><p>No further action is required, and you can disregard emails asking to grant this user access.</p><p><strong>If you believe this to be in error, immediately take steps to take your site offline</strong></p>";
+        if(mail($to,$subject,$body,$headers)) $i++;
+        $j++;
+      }
+    $ret['admin_users'] = $j;
+    $ret['emails_set'] = $i;
+    return $ret;
     
   }
 
