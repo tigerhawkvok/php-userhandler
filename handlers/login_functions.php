@@ -1479,13 +1479,18 @@ class UserFunctions extends DBHelper
         $ret['error'] = mysqli_error($l);
       }
     $ret['status'] = true;
-    # Send out an email to admins saying that they've been authorized.
-    $query = "SELECT `".$this->usercol."` FROM ".$this->getTable()." WHERE `admin_flag`=TRUE";
-    $r = mysqli_query($l,$query);
+
     $email='blackhole@'.$this->getShortUrl();
     $headers  = 'MIME-Version: 1.0' . "\r\n";
     $headers .= 'Content-type: text/html; charset=iso-8859-1' . "\r\n";
     $headers .= "From: ".$this->getDomain()." New User Bot <$email>";
+    # Let the user know
+    $subject = "Authorization granted to ".$this->getDomain();
+    $body = "<p>Your access to ".$this->getDomain()." as been enabled. <a href='".$this->getQualifiedDomain()."'>Click here to visit the site</a>.";
+    mail($userdata[$this->usercol],$subject,$body,$headers);
+    # Send out an email to admins saying that they've been authorized.
+    $query = "SELECT `".$this->usercol."` FROM ".$this->getTable()." WHERE `admin_flag`=TRUE";
+    $r = mysqli_query($l,$query);    
     $subject="[".$this->getDomain()."] New User Authenticated";
     $i = 0;
     $j = 0;
