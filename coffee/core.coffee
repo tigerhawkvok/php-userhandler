@@ -179,8 +179,12 @@ $ ->
   mapNewWindows()
   # Load any calls the script asked for
   try
-    # Has the user embedded their own scripts?
-    lateJS()
+    window.totpParams.tfaLock ?= false
+    window.latejs ?= new Object()
+    window.latejs.done ?= false
+    if window.latejs.done isnt true and window.totpParams.tfaLock isnt true
+      # Has the user embedded their own scripts?
+      lateJS()
   catch e
     console.warn("There was an error calling lateJS(). If you haven't set that up, you can safely ignore this.")
   try

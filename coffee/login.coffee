@@ -359,9 +359,14 @@ giveAltVerificationOptions = ->
     console.error("Could not check SMS-ability",result,status)
   sms.always ->
     $("##{remove_id}").click ->
-      # Take them to the page where they can remove the TOTP
-      window.totpParams.home ?=  url.attr('protocol') + '://' + url.attr('host') + '/login.php'
-      window.location.href = window.totpParams.home + "?2fa=t"
+      html = "\n  <p id='totp_message' class='error'>Are you sure you want to disable two-factor authentication?</p>\n  <form id='totp_remove' onsubmit='event.preventDefault();'>\n    <fieldset>\n      <legend>Remove Two-Factor Authentication</legend>\n      <input type='email' value='#{user}' readonly='readonly' id='username' name='username'/><br/>\n      <input type='password' id='password' name='password' placeholder='Password'/><br/>\n      <input type='text' id='code' name='code' placeholder='Authenticator Code or Backup Code' size='32' maxlength='32' autocomplete='off'/><br/>\n      <button id='remove_totp_button' class='totpbutton'>Remove Two-Factor Authentication</button>\n    </fieldset>\n  </form>\n"
+      $("#totp_prompt")
+      .html(html)
+      .attr("id","totp_remove_section")
+      $("#totp_remove").submit ->
+        doTOTPRemove()
+      $("#remove_totp_button").click ->
+        doTOTPRemove()
 
 verifyPhone = ->
   noSubmit()
@@ -483,6 +488,7 @@ $ ->
     doTOTPRemove()
   $("#alternate_verification_prompt").click ->
     giveAltVerificationOptions()
+    return false
   $("#verify_phone").submit ->
     verifyPhone()
   $("#verify_phone_button").click ->

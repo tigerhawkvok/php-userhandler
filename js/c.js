@@ -289,7 +289,7 @@
   };
 
   $(function() {
-    var e;
+    var e, _base, _base1;
     try {
       window.picturefill();
     } catch (_error) {
@@ -298,7 +298,18 @@
     }
     mapNewWindows();
     try {
-      lateJS();
+      if ((_base = window.totpParams).tfaLock == null) {
+        _base.tfaLock = false;
+      }
+      if (window.latejs == null) {
+        window.latejs = new Object();
+      }
+      if ((_base1 = window.latejs).done == null) {
+        _base1.done = false;
+      }
+      if (window.latejs.done !== true && window.totpParams.tfaLock !== true) {
+        lateJS();
+      }
     } catch (_error) {
       e = _error;
       console.warn("There was an error calling lateJS(). If you haven't set that up, you can safely ignore this.");
@@ -697,11 +708,15 @@
     });
     return sms.always(function() {
       return $("#" + remove_id).click(function() {
-        var _base2;
-        if ((_base2 = window.totpParams).home == null) {
-          _base2.home = url.attr('protocol') + '://' + url.attr('host') + '/login.php';
-        }
-        return window.location.href = window.totpParams.home + "?2fa=t";
+        var html;
+        html = "\n  <p id='totp_message' class='error'>Are you sure you want to disable two-factor authentication?</p>\n  <form id='totp_remove' onsubmit='event.preventDefault();'>\n    <fieldset>\n      <legend>Remove Two-Factor Authentication</legend>\n      <input type='email' value='" + user + "' readonly='readonly' id='username' name='username'/><br/>\n      <input type='password' id='password' name='password' placeholder='Password'/><br/>\n      <input type='text' id='code' name='code' placeholder='Authenticator Code or Backup Code' size='32' maxlength='32' autocomplete='off'/><br/>\n      <button id='remove_totp_button' class='totpbutton'>Remove Two-Factor Authentication</button>\n    </fieldset>\n  </form>\n";
+        $("#totp_prompt").html(html).attr("id", "totp_remove_section");
+        $("#totp_remove").submit(function() {
+          return doTOTPRemove();
+        });
+        return $("#remove_totp_button").click(function() {
+          return doTOTPRemove();
+        });
       });
     });
   };
@@ -840,7 +855,8 @@
       return doTOTPRemove();
     });
     $("#alternate_verification_prompt").click(function() {
-      return giveAltVerificationOptions();
+      giveAltVerificationOptions();
+      return false;
     });
     $("#verify_phone").submit(function() {
       return verifyPhone();
