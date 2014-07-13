@@ -1407,16 +1407,25 @@ class UserFunctions extends DBHelper
     $userdata = $this->getUser();
     if($this->getUsername() != $username) return array("status"=>false,"error"=>"Nonmatching names");
     $where = "WHERE `".$this->usercol."`='".$this->getUsername()."'";
-    $key = Stronghash::createSalt();
-    $query = "UPDATE `".$this->getTable()."` SET `".$this->tmpcol."`='$key' WHERE `".$this->usercol."`='".$this->username."'";
-    $r = mysqli_query($l,$query);
-    if($r === false) throw(new Exception("Unable to encrypt password"));
-    # Play nice with lookupUser
-    $encrypted_pw = self::encryptThis($key,$pw); 
-    if($this->lookupUser($username,$encrypted_pw,false,$totp,true) !== true) return array("status"=>false,"error"=>"Bad lookup");
+    $l = $this->openDB();
+    if(is_numeric($totp))
+      {
+        require_once(dirname(__FILE__).'/../stronghash/php-stronghash.php');
+        $key = Stronghash::createSalt();
+        $query = "UPDATE `".$this->getTable()."` SET `".$this->tmpcol."`='$key' WHERE `".$this->usercol."`='".$this->username."'";
+        $r = mysqli_query($l,$query);
+        if($r === false) throw(new Exception("Unable to encrypt password"));
+        # Play nice with lookupUser
+        $encrypted_pw = self::encryptThis($key,$pw);
+        $lookup = $this->lookupUser($username,$encrypted_pw,false,$totp,true);
+      }
+    else
+      {
+        $lookup = $this->lookupUser($username,$password,false,$totp,true);
+      }
+    if($lookup[0] !== true) return array("status"=>false,"error"=>"Bad lookup","lookup"=>$lookup);
     # This is the same user the object was called on, and they're
     # logged in validly
-    $l = $this->openDB();
     $query = "DELETE FROM `".$this->getTable()."` ".$where." LIMIT 1";
     $status =  mysqli_query($l,$query);
     if($status !== true) return array("status"=>$status,"error"=>mysqli_error($l));

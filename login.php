@@ -189,8 +189,15 @@ else
 
 // $random = "<li><a href='#' id='totp_help'>Help with Two-Factor Authentication</a></li>";
 
-$settings_blob = "<section id='account_settings'><h2>Settings</h2><ul id='settings_list'><li><a href='#' id='showAdvancedOptions' data-domain='$domain' data-user-tfa='".strbool($user->has2FA())."'>Advanced Options</a></li>".$verifyphone_link.$random."</ul></section>";
-
+try
+  {
+    $has2fa = strbool($user->has2FA());
+  }
+catch(Exception $e)
+  {
+    $has2fa = false;
+  }
+$settings_blob = "<section id='account_settings'><h2>Settings</h2><ul id='settings_list'><li><a href='#' id='showAdvancedOptions' data-domain='$domain' data-user-tfa='".$has2fa."'>Advanced Options</a></li>".$verifyphone_link.$random."</ul></section>";
 
 $login_output.="<div id='login_block'>";
 $alt_forms="<div id='alt_logins'>
