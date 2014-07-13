@@ -189,7 +189,7 @@ else
 
 // $random = "<li><a href='#' id='totp_help'>Help with Two-Factor Authentication</a></li>";
 
-$settings_blob = "<section id='account_settings'><h2>Settings</h2><ul id='settings_list'><li><a href='?2fa=t'>".$twofactor."</a></li>".$verifyphone_link.$random."</ul></section>";
+$settings_blob = "<section id='account_settings'><h2>Settings</h2><ul id='settings_list'><li><a href='#' id='showAdvancedOptions' data-domain='$domain' data-user-tfa='".strbool($user->has2FA())."'>Advanced Options</a></li>".$verifyphone_link.$random."</ul></section>";
 
 
 $login_output.="<div id='login_block'>";
@@ -693,6 +693,10 @@ else if(isset($_REQUEST['2fa']))
       {
         # Should never trigger
         throw(new Exception("Unexpected condition setting up two-factor authentication"));
+      }
+    if($logged_in)
+      {
+        $login_output .= $settings_blob;
       }
   }
 else

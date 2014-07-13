@@ -915,6 +915,11 @@ class UserFunctions extends DBHelper
 
   public function lookupUser($username,$pw,$return=true,$totp_code=false,$override = false)
   {
+    /***
+     *
+     *
+     ***/
+    
     if(strlen($pw_in)>8192)
       {
         throw(new Exception("Passwords must be less than 8192 characters in length."));
@@ -979,7 +984,7 @@ class UserFunctions extends DBHelper
                             # Return decrypted userdata, if applicable
                             $decname=self::decryptThis($salt.$pw,$userdata['name']);
                             if(empty($decname))$decname=$userdata['name'];
-                            return array(true,$decname);
+                            return true;
                           }
                         else
                           {
@@ -1389,6 +1394,35 @@ class UserFunctions extends DBHelper
      ***/
   }
 
+  public function removeThisAccount($username,$password,$totp = false)
+  {
+    /***
+     * Remove a user account
+     *
+     * @param string username the same username as this object's
+     * @param string password the user's password
+     * @param int totp the TOTP code
+     * @return array
+     ***/
+    $userdata = $this->getUser();
+    if($this->getUsername() != $username) return array("status"=>false,"error"=>"Nonmatching names");
+    $where = "WHERE `".$this->usercol."`='".$this->getUsername()."'";
+    $key = Stronghash::createSalt();
+    $query = "UPDATE `".$this->getTable()."` SET `".$this->tmpcol."`='$key' WHERE `".$this->usercol."`='".$this->username."'";
+    $r = mysqli_query($l,$query);
+    if($r === false) throw(new Exception("Unable to encrypt password"));
+    # Play nice with lookupUser
+    $encrypted_pw = self::encryptThis($key,$pw); 
+    if($this->lookupUser($username,$encrypted_pw,false,$totp,true) !== true) return array("status"=>false,"error"=>"Bad lookup");
+    # This is the same user the object was called on, and they're
+    # logged in validly
+    $l = $this->openDB();
+    $query = "DELETE FROM `".$this->getTable()."` ".$where." LIMIT 1";
+    $status =  mysqli_query($l,$query);
+    if($status !== true) return array("status"=>$status,"error"=>mysqli_error($l));
+    else return array("status"=>$status);
+  }
+
 
   public function getAuthTokens($target_user = null,$secret_key = null)
   {
@@ -1487,7 +1521,7 @@ class UserFunctions extends DBHelper
       }
     if(sizeof($destinations) == 0)
       {
-        $errors = array("message"=>"No valid destinations","query"=>$query,"rows"=>mysqli_num_rows($r));
+        $errors = array("message"=>"No valid destinations","rows"=>mysqli_num_rows($r));
       }
     return array("status"=>$success,"mailer"=>array("emails_sent"=>$i,"attempts_made"=>$j,"errors"=>$errors,"destinations"=>$destinations,"last_error"=>$lasterror));
 

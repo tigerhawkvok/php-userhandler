@@ -246,8 +246,9 @@ makeTOTP = ->
       stopLoad()
     else
       console.error("Couldn't generate TOTP code",urlString  + "?" + args)
+      console.warn(result)
       $("#totp_message")
-      .text("There was an error generating your code. Please try again.")
+      .text("There was an error generating your code. #{result.message}")
       .addClass("error")
       stopLoadError()
   totp.fail (result,status) ->
@@ -457,9 +458,64 @@ showInstructions = (path = "help/instructions_pop.html") ->
   .fail (result,status) ->
     console.error("Failed to load instructions @ #{path}",result,status)
 
+showAdvancedOptions = (domain,has2fa) ->
+  html = "<ul id='advanced_options_list'>"
+  html += "<li><a href='?2fa=t'>Configure Two-Factor Authentication</a></li>"
+  html += "<li><a href='#' id='removeAccount'>Remove Account</a></li>"
+  $("#account_settings").after(html)
+  $("#removeAccount").click ->
+    removeAccount(this,"#{domain}_user",has2fa)
+
+removeAccount = (caller,cookie_key,has2fa = true) ->
+  # We only grab the username from the cookie to prevent any chance
+  # that anyone other than the current user is set up
+  username = $.cookie(cookie_key)
+  removal_button = "remove_acct_button"
+  section_id = "remove_account_section"
+  tfaBlock = if has2fa then "\n      <input type='text' id='code' name='code' placeholder='Authenticator Code or Backup Code' size='32' maxlength='32' autocomplete='off'/><br/>" else ""
+  html = "<section id='#{section_id}'>\n  <p id='remove_message' class='error'>Are you sure you want to disable two-factor authentication?</p>\n  <form id='account_remove' onsubmit='event.preventDefault();'>\n    <fieldset>\n      <legend>Remove My Account</legend>\n      <input type='email' value='#{username}' readonly='readonly' id='username' name='username'/><br/>\n      <input type='password' id='password' name='password' placeholder='Password'/><br/>#{tfaBlock}\n      <button id='#{removal_button}' class='totpbutton'>Remove My Account Permanantly</button>\n    </fieldset>\n  </form>\n</section>"
+  $(caller).after(html)
+  $("##{removal_button}").click ->
+    doRemoveAccountAction()
+  $("#account_remove").submit ->
+    doRemoveAccountAction()
+
+doRemoveAccountAction = ->
+  # Actually do the POST and such
+  animateLoad()
+  ajaxLanding = "async_login_handler.php"
+  urlString = url.attr('protocol') + '://' + url.attr('host') + '/' + window.totpParams.subdirectory + ajaxLanding
+  username = $("#username").val()
+  password = $("#password").val()
+  code = $("#code").val()
+  args = "action=removeaccount&username=#{username}&password=#{password}&code=#{code}"
+  $.post(urlString,args,'json')
+  .done (result) ->
+    if result.status is true
+      $("#remove_message").text("Your account has been successfully deleted.")
+      # On success, wipe cookies
+      $.each $.cookie(), (k,v) ->
+        $.removeCookie(k,{ path: '/' })
+      stopLoad()
+    else
+      $("#remove_message").text("There was an error removing your account. Please try again.")
+      console.error("Got an error-result: ",result.error)
+      stopLoadError()
+  .fail (result,status) ->
+    $("#remove_message")
+    .text(result.error)
+    .addclass("error")
+    $("totp_code").val("")
+    console.error("Ajax Failure",urlString + "?" + args,result,status)
+    stopLoadError()
+
+
 noSubmit = ->
   event.preventDefault()
   event.returnValue = false
+
+
+
 
 $ ->
   if $("#password.create").exists()
@@ -497,6 +553,10 @@ $ ->
     window.location.href = window.totpParams.home
   $("#totp_help").click ->
     showInstructions()
+  $("#showAdvancedOptions").click ->
+    domain = $(this).attr('data-domain')
+    has2fa = if $(this).attr("data-user-tfa") is 'true' then true else false
+    showAdvancedOptions(domain,has2fa)
   try
     if $.url().param("showhelp")? then showInstructions()
   catch e

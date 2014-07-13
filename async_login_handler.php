@@ -52,6 +52,9 @@ switch($do)
   case "verifyphone":
     returnAjax(verifyPhone($_REQUEST));
     break;
+  case "removeaccount":
+    returnAjax(removeAccount($_REQUEST));
+    break;
   default:
     returnAjax(getLoginState($_REQUEST),true);
   }
@@ -181,6 +184,24 @@ function removeTOTP($get)
    ***/
   $u = new UserFunctions();
   return $u->removeTOTP($get['username'],$get['password'],$get['code']);
+}
+
+function removeAccount($get)
+{
+  # The password pushed in will need to be encrypted as if from login
+  $baseurl = 'http';
+  if ($_SERVER["HTTPS"] == "on") {$baseurl .= "s";}
+  $baseurl .= "://www.";
+  $baseurl.=$_SERVER['HTTP_HOST'];
+  $base_long = str_replace("http://","",strtolower($baseurl));
+  $base_long = str_replace("https://","",strtolower($base_long));
+  $base_arr = explode("/",$base_long);
+  $base = $base_arr[0];
+  $url_parts = explode(".",$base);
+  $tld = array_pop($url_parts);
+  $domain = array_pop($url_parts);
+  $u = new UserFunctions($_COOKIE[$domain."_user"]);
+  return $u->removeThisAccount($get['username'],$get['password'],$get['code']);
 }
 
 function sendTOTPText($get)
