@@ -459,7 +459,11 @@ showInstructions = (path = "help/instructions_pop.html") ->
     console.error("Failed to load instructions @ #{path}",result,status)
 
 showAdvancedOptions = (domain,has2fa) ->
-  html = "<ul id='advanced_options_list'>"
+  advancedListId = "advanced_options_list"
+  if $("##{advancedListId}").exists()
+    $("##{advancedListId}").toggle("fast")
+    return true
+  html = "<ul id='#{advancedListId}'>"
   html += "<li><a href='?2fa=t'>Configure Two-Factor Authentication</a></li>"
   html += "<li><a href='#' id='removeAccount'>Remove Account</a></li>"
   $("#settings_list").after(html)

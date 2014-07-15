@@ -818,8 +818,13 @@
   };
 
   showAdvancedOptions = function(domain, has2fa) {
-    var html;
-    html = "<ul id='advanced_options_list'>";
+    var advancedListId, html;
+    advancedListId = "advanced_options_list";
+    if ($("#" + advancedListId).exists()) {
+      $("#" + advancedListId).toggle("fast");
+      return true;
+    }
+    html = "<ul id='" + advancedListId + "'>";
     html += "<li><a href='?2fa=t'>Configure Two-Factor Authentication</a></li>";
     html += "<li><a href='#' id='removeAccount'>Remove Account</a></li>";
     $("#settings_list").after(html);
