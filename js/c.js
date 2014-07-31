@@ -668,6 +668,10 @@
     sms_id = "send_totp_sms";
     pane_id = "alt_auth_pane";
     pane_messages = "alt_auth_messages";
+    if ($("#" + pane_id).exists()) {
+      $("#" + pane_id).toggle("fast");
+      return false;
+    }
     messages = new Object();
     messages.remove = "<a href='#' id='" + remove_id + "'>Remove two-factor authentication</a>";
     sms = $.get(urlString, args, 'json');

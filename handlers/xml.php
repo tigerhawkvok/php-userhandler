@@ -44,28 +44,39 @@ class Xml {
 
   public function getTagAttributes($string,$tag,$all=false)
   {
-    // return [[attribute,value],[attribute,value],...] for all attributes in <$tag>
+    /***
+     * Return a array(attribute=>value) list of attributes for a tag
+     * type
+     *
+     * @param string $string the text blob to search through
+     * @param string $tag the tag to look for
+     * @param boolean Should all instances of <tag> in $string be looked
+     * for? (default: false)
+     * @return array of [attribute=>value] pairs. If $all is true, then
+     * each instance of <tag> has its attributes returned in a numeric
+     * key as array(0 => array(attribute=>value), 1 => ...)
+     ***/
     $tag=str_replace("<","",$tag);
     $tag=str_replace(">","",$tag);
     $tag="<".$tag;
     $pos=strpos($string,$tag);
     if($pos!==false)
       {
-        // found a valid tag
-        // return all attribute values for a given tag
+        # found a valid tag
+        # return all attribute values for a given tag
         $all_tags=explode($tag,$string);
-        // it should never be the first iterator. Kill it.
+        # it should never be the first iterator. Kill it.
         $all_tags=array_slice($all_tags,1);
         if($all) $parent_array=array();
         foreach($all_tags as $sstring)
           {
             $pos2=strpos($sstring,">");
             $sstring=substr($sstring,0,$pos2);
-            if(empty($sstring) && !$all) return false; // this means that the tag has no attributes
+            if(empty($sstring) && !$all) return false; # this means that the tag has no attributes
             if(!empty($sstring))
               {
                 $attributes=preg_split("/[\"'] +/",$sstring);
-                // iterate through $attributes, and break each attribute pair into a subarray
+                # iterate through $attributes, and break each attribute pair into a subarray
                 $result_array=array();
                 foreach($attributes as $attribute)
                   {
@@ -73,23 +84,23 @@ class Xml {
                     $i=0;
                     foreach($pair as $value) 
                       {
-                        // remove leading or trailing quote
+                        # remove leading or trailing quote
                         $value=str_replace('"',"",$value);
                         $value=str_replace("'","",$value);
                         $value=str_replace("&#39;","",$value);
                         $pair[$i]=trim($value);
                         $i++;
                       }
-                    $result_array[]=$pair;
+                    $result_array[$pair[0]]=$pair[1];
                   }
                 if(!$all) return $result_array;
               }
-            // This means $all has been declared
-            // stuff into larger parent array
+            # This means $all has been declared
+            # stuff into larger parent array
             if(empty($sstring)) $parent_array[]=false;
             else $parent_array[]=$result_array;
           }
-        // take large parent array and return that
+        # take large parent array and return that
         return $parent_array;
       }
     return false;
@@ -162,7 +173,6 @@ class Xml {
               {
                 $ss_old=$sstring;
                 $sstring=substr($sstring,0,$pos2); // text string of tag
-                //#echo displayDebug("Extracted ".$sstring."\n");
                 $attributes=preg_split("/[\"'] +/",$sstring); // match against truncated string
               }
             else $attributes=array(); // it'll skip the foreach loop
@@ -170,7 +180,6 @@ class Xml {
             foreach($attributes as $test)
               {
                 $test=trim($test);
-                //#echo "Running against \"$test\" in tag...\n";
                 if(strpos($test,$attribute)!==false && $matched===false)
                   {      
                     // Potential attribute match
@@ -179,7 +188,6 @@ class Xml {
                     if(substr($test,0,$pos3+1)==$matchstring)
                       {
                         // Matching attribute found
-                        //#echo displayDebug("Testing $test against $matchstring \n");
                         $value=substr($test,$pos3+2); // old attribute value
                         if($value==$attvalue) 
                           {
@@ -209,7 +217,6 @@ class Xml {
                               }
                             // put the rest of the tag info on
                             $newtag=$newtag.substr($ss_old,$pos2);
-                            //#echo "This is the tag: ".displayDebug($newtag). "\n\n";
                             break; // break out of the foreach loop
                           }
                       }
@@ -220,9 +227,7 @@ class Xml {
             if(!empty($newtag)) $sstring=$newtag; // break the tag seach
             $newtag=""; // empty out new tag
             $new_buffer.=$sstring;
-            //#echo "Current buffer: ".displayDebug($new_buffer)."\n\n";
           } // This tag instance fails. Repeat next tag
-        //#echo "Finshed iterating over all_tags.\n";
         if(!$retmatch)
           {
             // no match, but there is a tag. Add the attribute.
@@ -257,16 +262,25 @@ class Xml {
 
   public function getTagContents($string,$tag)
   {
-    if(strpos($tag,"<")===FALSE) $tag .= "<";
-    if(strpos($tag,">")===FALSE) $tag = $tag . ">";
-    $pos=strpos($string,$tag);
-    if($pos!==FALSE)
+    /***
+     * Get the contents of the first instance of a given tag
+     *
+     * @param string $string the blob to search through
+     * @param string $tag the tag to look for
+     * @return false|string the contents of <tag>
+     ***/
+    if(strpos($tag,"<")===false) $tag = "<".$tag;
+    if(strpos($tag,">")===false) $tag .= ">";
+    $pos=strpos($string,substr($tag,0,-1));
+    if($pos!==false)
       {
-        $val=substr($string,$pos+strlen($tag));
-        $val=explode("</" . str_replace("<","",str_replace(">","",$tag)),$val);
-        return $val[0]; // always the first one
+        $val=substr($string,$pos+strlen(substr($tag,0,-1)));
+        $pos = strpos($val,">"); # find the next occurance
+        $val = substr($val,$pos+1);
+        $val=explode("</" . str_replace(array("<",">"),"",$tag),$val);
+        return $val[0]; # always the first one
       }
-    else return FALSE;
+    else return false;
   }
 
   

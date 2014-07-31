@@ -197,7 +197,7 @@ catch(Exception $e)
   {
     $has2fa = false;
   }
-$settings_blob = "<section id='account_settings'><h2>Settings</h2><ul id='settings_list'><li><a href='#' id='showAdvancedOptions' data-domain='$domain' data-user-tfa='".$has2fa."'>Advanced Options</a></li>".$verifyphone_link.$random."</ul></section>";
+$settings_blob = "<section id='account_settings'><h2>Settings</h2><ul id='settings_list'><li><a href='#' id='showAdvancedOptions' data-domain='$domain' data-user-tfa='".$has2fa."'>Account Settings</a></li>".$verifyphone_link.$random."</ul></section>";
 
 $login_output.="<div id='login_block'>";
 $alt_forms="<div id='alt_logins'>
