@@ -2,7 +2,7 @@
 
 use Base32\Base32;
 
-require_once(dirname(__FILE__)."/DBHelper.php");
+require_once(dirname(__FILE__)."/../core/core.php");
 
 class UserFunctions extends DBHelper
 {
@@ -925,7 +925,6 @@ class UserFunctions extends DBHelper
         throw(new Exception("Passwords must be less than 8192 characters in length."));
       }
     // check it's a valid email! validation skipped.
-    require_once(dirname(__FILE__).'/xml.php');
     $xml=new Xml;
     $result=$this->lookupItem($username,$this->usercol);
     if($result!==false)
@@ -1326,7 +1325,6 @@ class UserFunctions extends DBHelper
             if($jd==null)
               {
                 // XML -- only takes one tag in!!
-                require_once(dirname(__FILE__).'/xml.php');
                 $xml_data=explode("</",$data);
                 $tag=array_pop($xml_data);
                 $tag=$this->sanitize(substr($tag,0,-1));
