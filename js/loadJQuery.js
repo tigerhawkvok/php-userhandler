@@ -16,7 +16,7 @@ function cascadeJQLoad(i) { // Use alternate CDNs where appropriate to load jQue
     var dependent_libraries = [
         "jquery.cookie.min.js",
         "purl.min.js",
-        "base64.min.js",
+        "../bower_components/js-base64/base64.min.js",
         "c.min.js"
     ];
     if (window.jQuery !== undefined) {
