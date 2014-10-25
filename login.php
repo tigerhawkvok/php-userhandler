@@ -68,9 +68,7 @@ $cookielink=$domain."_link";
  */
 
 require_once(dirname(__FILE__).'/handlers/login_functions.php');
-require_once(dirname(__FILE__).'/handlers/functions.inc');
-require_once(dirname(__FILE__).'/handlers/db_hook.inc');
-require_once(dirname(__FILE__).'/handlers/xml.php');
+require_once(dirname(__FILE__).'/core/core.php');
 
 
 $xml=new Xml;
