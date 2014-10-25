@@ -21,7 +21,7 @@ if not window.totpParams.subdirectory?
 window.totpParams.mainStylesheetPath = window.totpParams.relative+"css/otp_styles.css"
 window.totpParams.popStylesheetPath = window.totpParams.relative+"css/otp_panels.css"
 
-checkPasswordLive = ->
+checkPasswordLive = (selector = "#createUser_submit") ->
   pass = $("#password").val()
   re = new RegExp("^(?:(?=^.{#{window.passwords.minLength},}$)((?=.*\\d)|(?=.*\\W+))(?![.\\n])(?=.*[A-Z])(?=.*[a-z]).*$)$")
   if pass.length >window.passwords.overrideLength or pass.match(re)
@@ -32,21 +32,21 @@ checkPasswordLive = ->
     window.passwords.basepwgood = false
   evalRequirements()
   if not isNull($("#password2").val())
-    checkMatchPassword()
-    toggleNewUserSubmit()
+    checkMatchPassword(selector)
+    toggleNewUserSubmit(selector)
   return false
 
-checkMatchPassword = ->
+checkMatchPassword = (selector = "#createUser_submit") ->
   if $("#password").val() is $("#password2").val()
     $('#password2').css('background', window.passwords.goodbg)
     window.passwords.passmatch = true
   else
     $('#password2').css('background', window.passwords.badbg)
     window.passwords.passmatch = false
-  toggleNewUserSubmit()
+  toggleNewUserSubmit(selector)
   return false
 
-toggleNewUserSubmit = ->
+toggleNewUserSubmit = (selector = "#createUser_submit") ->
   try
     dbool = not(window.passwords.passmatch && window.passwords.basepwgood)
     $("#createUser_submit").attr("disabled",dbool)
@@ -535,6 +535,10 @@ noSubmit = ->
 
 
 $ ->
+  if not window.passwords.submitSelector?
+    selector = "#createUser_submit"
+  else
+    selector = window.passwords.submitSelector
   if $("#password.create").exists()
     loadJS(window.totpParams.relative+"js/zxcvbn/zxcvbn.js")
     $("#password.create")

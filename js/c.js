@@ -361,8 +361,11 @@
 
   window.totpParams.popStylesheetPath = window.totpParams.relative + "css/otp_panels.css";
 
-  checkPasswordLive = function() {
+  checkPasswordLive = function(selector) {
     var pass, re;
+    if (selector == null) {
+      selector = "#createUser_submit";
+    }
     pass = $("#password").val();
     re = new RegExp("^(?:(?=^.{" + window.passwords.minLength + ",}$)((?=.*\\d)|(?=.*\\W+))(?![.\\n])(?=.*[A-Z])(?=.*[a-z]).*$)$");
     if (pass.length > window.passwords.overrideLength || pass.match(re)) {
@@ -374,13 +377,16 @@
     }
     evalRequirements();
     if (!isNull($("#password2").val())) {
-      checkMatchPassword();
-      toggleNewUserSubmit();
+      checkMatchPassword(selector);
+      toggleNewUserSubmit(selector);
     }
     return false;
   };
 
-  checkMatchPassword = function() {
+  checkMatchPassword = function(selector) {
+    if (selector == null) {
+      selector = "#createUser_submit";
+    }
     if ($("#password").val() === $("#password2").val()) {
       $('#password2').css('background', window.passwords.goodbg);
       window.passwords.passmatch = true;
@@ -388,12 +394,15 @@
       $('#password2').css('background', window.passwords.badbg);
       window.passwords.passmatch = false;
     }
-    toggleNewUserSubmit();
+    toggleNewUserSubmit(selector);
     return false;
   };
 
-  toggleNewUserSubmit = function() {
+  toggleNewUserSubmit = function(selector) {
     var dbool, e;
+    if (selector == null) {
+      selector = "#createUser_submit";
+    }
     try {
       dbool = !(window.passwords.passmatch && window.passwords.basepwgood);
       return $("#createUser_submit").attr("disabled", dbool);
@@ -902,7 +911,12 @@
   };
 
   $(function() {
-    var e;
+    var e, selector;
+    if (window.passwords.submitSelector == null) {
+      selector = "#createUser_submit";
+    } else {
+      selector = window.passwords.submitSelector;
+    }
     if ($("#password.create").exists()) {
       loadJS(window.totpParams.relative + "js/zxcvbn/zxcvbn.js");
       $("#password.create").keyup(function() {
