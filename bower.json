@@ -1,0 +1,19 @@
+{
+  "name": "php-userhandler",
+  "version": "0.9.5",
+  "homepage": "https://github.com/tigerhawkvok/php-userhandler",
+  "authors": [
+    "Philip Kahn <tigerhawkvok@gmail.com>"
+  ],
+  "description": "Self-Contained PHP user handler",
+  "main": "login.php",
+  "license": "LGPLv3",
+  "private": true,
+  "ignore": [
+    "**/.*",
+    "node_modules",
+    "bower_components",
+    "test",
+    "tests"
+  ]
+}
