@@ -788,7 +788,7 @@ class UserFunctions extends DBHelper
      * @param string pw_in The input password. This function will hash it.
      * @param array $name An array of form array(firstName,lastName)
      * @param string $dname The display name of the user.
-     * @return array
+     * @return array {"status"=>bool,"error"=>message,"message"=>user message,[userdata,cookies,auth_result]}
      ***/
     if(strlen($pw_in)>8192)
       {
@@ -913,11 +913,22 @@ class UserFunctions extends DBHelper
     else return array("status"=>false,"error"=>'Failure: unknown database error. Your user was unable to be saved.');
   }
 
+
+
+
+  
   public function lookupUser($username,$pw,$return=true,$totp_code=false,$override = false)
   {
     /***
+     * Primary function to check login validation.
      *
-     *
+     * @param string|int $username a username looking at a column set by the
+     * usercol of this object
+     * @param string $pw the plaintext password of the user
+     * @param bool $return whether to return user data, or just the
+     * boolean lookup state
+     * @param bool $totp_code 
+     * @param bool $override
      ***/
     
     if(strlen($pw_in)>8192)
