@@ -435,7 +435,7 @@
     }
     $("#dynamic").text(webkit_css + moz_css);
     $(".strength-eval").css("background", window.passwords.badbg);
-    if (pass.length > 20) {
+    if (pass.length >= window.passwords.overrideLength) {
       $(".strength-eval").css("background", window.passwords.goodbg);
     } else {
       if (pass.match(/^(?:((?=.*\d)|(?=.*\W+)).*$)$/)) {

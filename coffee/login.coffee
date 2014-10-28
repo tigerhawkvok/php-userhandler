@@ -79,7 +79,7 @@ evalRequirements = ->
     $("<style type='text/css' id='dynamic' />").appendTo("head")
   $("#dynamic").text(webkit_css + moz_css)
   $(".strength-eval").css("background",window.passwords.badbg)
-  if pass.length > 20 then $(".strength-eval").css("background",window.passwords.goodbg)
+  if pass.length >= window.passwords.overrideLength then $(".strength-eval").css("background",window.passwords.goodbg)
   else
     if pass.match(/^(?:((?=.*\d)|(?=.*\W+)).*$)$/) then $("#strength-numspecial .strength-eval").css("background",window.passwords.goodbg)
     if pass.match(/^(?=.*[a-z]).*$/) then $("#strength-alpha .strength-eval").css("background",window.passwords.goodbg)
