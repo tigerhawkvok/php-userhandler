@@ -126,7 +126,7 @@ class DBHelper {
     $query="CREATE TABLE `".$this->getTable()."` (id int(10) NOT NULL auto_increment";
     foreach($this->getCols() as $col=>$type)
       {
-        $query.=", ".$this->sanitize($col)." ".$type;
+        $query.=", ".$this->sanitize($col,true)." ".$type;
       }
     $query.=",PRIMARY KEY (id),UNIQUE id (id),KEY id_2 (id))";
 
@@ -169,7 +169,7 @@ class DBHelper {
     return $inp;
   }
 
-  public function sanitize($input)
+  public function sanitize($input,$dirty_underscore = false)
   {
     # Emails get mutilated here -- let's check that first
     $preg = "/[a-z0-9!#$%&'*+=?^_`{|}~-]+(?:\.[a-z0-9!#$%&'*+=?^_`{|}~-]+)*@(?:[a-z0-9](?:[a-z0-9-]*[a-z0-9])?\.)+(?:[a-z]{2}|com|org|net|edu|gov|mil|biz|info|mobi|name|aero|asia|jobs|museum)\b/";
@@ -194,7 +194,7 @@ class DBHelper {
             $input = stripslashes($input);
           }
         $input  = htmlentities(self::cleanInput($input));
-        $input=str_replace("_","&#95;",$input); // Fix _ potential wildcard
+        if(!$dirty_underscore) $input=str_replace("_","&#95;",$input); // Fix _ potential wildcard
         $input=str_replace("%","&#37;",$input); // Fix % potential wildcard
         $input=str_replace("'","&#39;",$input);
         $input=str_replace('"',"&#34;",$input);
