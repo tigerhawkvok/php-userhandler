@@ -169,7 +169,7 @@ class DBHelper {
     return $inp;
   }
 
-  public function sanitize($input,$dirty_underscore = false)
+  public function sanitize($input,$dirty_entities = false)
   {
     # Emails get mutilated here -- let's check that first
     $preg = "/[a-z0-9!#$%&'*+=?^_`{|}~-]+(?:\.[a-z0-9!#$%&'*+=?^_`{|}~-]+)*@(?:[a-z0-9](?:[a-z0-9-]*[a-z0-9])?\.)+(?:[a-z]{2}|com|org|net|edu|gov|mil|biz|info|mobi|name|aero|asia|jobs|museum)\b/";
@@ -184,7 +184,7 @@ class DBHelper {
       {
         foreach($input as $var=>$val)
           {
-            $output[$var] = $this->sanitize($val,$dirty_underscore);
+            $output[$var] = $this->sanitize($val,$dirty_entities);
           }
       }
     else
@@ -192,12 +192,15 @@ class DBHelper {
         if (get_magic_quotes_gpc())
           {
             $input = stripslashes($input);
+          } 
+        if(!$dirty_entities)
+          {
+            $input  = htmlentities(self::cleanInput($input));
+            $input=str_replace("_","&#95;",$input); // Fix _ potential wildcard
+            $input=str_replace("%","&#37;",$input); // Fix % potential wildcard
+            $input=str_replace("'","&#39;",$input);
+            $input=str_replace('"',"&#34;",$input);
           }
-        $input  = htmlentities(self::cleanInput($input));
-        if(!$dirty_underscore) $input=str_replace("_","&#95;",$input); // Fix _ potential wildcard
-        $input=str_replace("%","&#37;",$input); // Fix % potential wildcard
-        $input=str_replace("'","&#39;",$input);
-        $input=str_replace('"',"&#34;",$input);
         $l=$this->openDB();
         $output = mysqli_real_escape_string($l,$input);
       }
@@ -541,7 +544,7 @@ public function doSoundex($search,$cols = "*",$precleaned = false,$order_by = fa
       }
     $column=key($unq_id);
     $uval=current($unq_id);
-    
+
     if(!$this->is_entry($uval,$column,$precleaned))
       {
         throw(new Exception("No item '$uval' exists for column '$column'"));
