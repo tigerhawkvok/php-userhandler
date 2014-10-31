@@ -73,7 +73,7 @@ class UserFunctions extends DBHelper
     if(!$this->testSettings())
       {
         # There's a database problem
-        throw(new Exception("Database configuration problem"));
+        throw(new Exception("Database configuration problem",$this->testSettings(true)));
       }
 
     if(!empty($user_data_storage))
