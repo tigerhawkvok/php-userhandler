@@ -89,13 +89,13 @@ class DBHelper {
     $this->url = $url;
   }
 
-  protected function setCols($cols)
+  protected function setCols($cols,$dirty_columns = true)
   {
     if(!is_array($cols)) throw(new Exception("Invalid columns"));
     $shadow = array();
     foreach($cols as $col=>$type)
       {
-        $col = $this->sanitize($col);
+        $col = $this->sanitize($col,$dirty_columns);
         $shadow[$col] = $type;
       }
     $this->cols = $shadow;
