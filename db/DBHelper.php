@@ -107,18 +107,18 @@ class DBHelper {
     return $this->cols;
   }
 
-  protected function testSettings($table = null)
+  protected function testSettings($table = null,$detail = false)
   {
     $l=$this->openDB();
     if(!empty($table)) $this->setTable($table);
     if(mysqli_query($l,"SELECT * FROM `".$this->getTable()."` LIMIT 1")===false)
       {
-        return $this->createTable();
+        return $this->createTable($detail);
       }
     return true;
   }
 
-  private function createTable()
+  private function createTable($detail = false)
   {
     /***
      * @return bool
@@ -137,6 +137,7 @@ class DBHelper {
         $query2="INSERT INTO `".$this->getTable()."` VALUES()";
         $r2=mysqli_query($l,$query2);
       }
+    if($detail) return array("status"=>$r && $r2,"create"=>$query,"insert"=>$query2);
     return $r && $r2;
   }
 
