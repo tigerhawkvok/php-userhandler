@@ -70,11 +70,11 @@ class UserFunctions extends DBHelper
     $this->setTable($default_user_table);
 
     # Check it
-    if(!$this->testSettings())
+    $details = $this->testSettings(null,true);
+    if(!$details['status'])
       {
         # There's a database problem
-        $details = $this->testSettings(null,true);
-        throw(new Exception("Database configuration problem"));
+        throw(new Exception("Database configuration problem - ".json_encode($details)));
       }
 
     if(!empty($user_data_storage))
