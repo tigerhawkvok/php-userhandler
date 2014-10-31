@@ -184,7 +184,7 @@ class DBHelper {
       {
         foreach($input as $var=>$val)
           {
-            $output[$var] = $this->sanitize($val);
+            $output[$var] = $this->sanitize($val,$dirty_underscore);
           }
       }
     else
