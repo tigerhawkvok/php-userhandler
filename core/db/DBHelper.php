@@ -129,15 +129,17 @@ class DBHelper {
         $query.=", ".$this->sanitize($col,true)." ".$type;
       }
     $query.=",PRIMARY KEY (id),UNIQUE id (id),KEY id_2 (id))";
-
+    $error = false;
     $l=$this->openDB();
     $r=mysqli_query($l,$query);
     if($r!==false)
       {
         $query2="INSERT INTO `".$this->getTable()."` VALUES()";
-        $r2=mysqli_query($l,$query2);
+        $r2 = mysqli_query($l,$query2);
+        if($r2 === false) $error = mysqli_error($l);
       }
-    if($detail) return array("status"=>$r && $r2,"create"=>$query,"insert"=>$query2);
+    else $error = mysqli_error($l);
+    if($detail) return array("status"=>$r && $r2,"create"=>$query,"insert"=>$query2,"error"=>$error);
     return $r && $r2;
   }
 
