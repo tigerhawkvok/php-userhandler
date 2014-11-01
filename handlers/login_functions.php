@@ -71,7 +71,7 @@ class UserFunctions extends DBHelper
 
     # Check it
     $details = $this->testSettings(null,true);
-    if(!$details['status'])
+    if(!$details['status'] && $details != true)
       {
         # There's a database problem
         throw(new Exception("Database configuration problem - ".json_encode($details)));
