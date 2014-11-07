@@ -175,4 +175,28 @@ if(!function_exists('shuffle_assoc'))
     }
   }
 
+if(!function_exists('displayDebug'))
+  {
+    function displayDebug($string)
+    {
+      # alias
+      return debugDisplay($string);
+    }
+    function debugDisplay($string)
+    {
+      if(is_array($string))
+        {
+          foreach($string as $k=>$el)
+            {
+              if(is_bool($el)) $string[$k]="(bool) ".strbool($el);
+            }
+          $string=print_r($string,true);
+        }
+      $string=str_replace("&","&amp;",$string);
+      $string=str_replace("<","&lt;",$string);
+      $string=str_replace(">","&gt;",$string);
+      return "<pre style='background:white;color:black;'>".$string."</pre>";
+    }
+  }
+
 ?>
