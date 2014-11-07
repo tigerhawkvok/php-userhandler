@@ -23,7 +23,8 @@ class UserFunctions extends DBHelper
      *                         and (array)"cols" of type "column_name"=>"type".
      ***/
     # Set up the parameters in CONFIG.php
-    require_once(dirname(__FILE__).'/../CONFIG.php');
+    $config_path = dirname(__FILE__).'/../CONFIG.php';
+    require_once($config_path);
     global $user_data_storage,$profile_picture_storage,$site_security_token,$service_email,$minimum_password_length,$password_threshold_length,$db_cols,$default_user_table,$default_user_database,$password_column,$cookie_ver_column,$user_column,$totp_column,$totp_steps,$temporary_storage,$needs_manual_authentication,$totp_rescue,$ip_record,$default_user_database,$default_sql_user,$default_sql_password,$sql_url,$default_user_table,$baseurl,$twilio_sid,$twilio_token,$twilio_number,$site_name,$link_column;
 
     if(!empty($db_params))
@@ -61,13 +62,23 @@ class UserFunctions extends DBHelper
               }
           }
       }
-    # Configure the database
-    $this->setSQLUser($default_sql_user);
-    $this->setDB($default_user_database);
-    $this->setSQLPW($default_sql_password);
-    $this->setSQLURL($sql_url);
-    $this->setCols($db_cols);
-    $this->setTable($default_user_table);
+
+    try
+      {
+        # Configure the database
+        $this->setSQLUser($default_sql_user);
+        $this->setDB($default_user_database);
+        $this->setSQLPW($default_sql_password);
+        $this->setSQLURL($sql_url);
+        $this->setCols($db_cols);
+        $this->setTable($default_user_table);
+      }
+    catch(Exception $e)
+      {
+        # More complete message
+        $message = "Could not initialize database setup [".$e->getMessage()."] in <".$e->getTraceAsString()."> (using ".$config_path.")";
+        throw(new Exception($message));
+      }
 
     # Check it
     $details = $this->testSettings(null,true);
