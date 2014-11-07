@@ -120,11 +120,12 @@ class UserFunctions extends DBHelper
     $this->twilio_number = $twilio_number;
     $this->site = $site_name;
 
+    $proto = 'http';
+    if (isset($_SERVER["HTTPS"]) && $_SERVER["HTTPS"] == "on") {$proto .= "s";}
+    
     if(empty($baseurl))
       {
-        $baseurl = 'http';
-        if ($_SERVER["HTTPS"] == "on") {$baseurl .= "s";}
-        $baseurl .= "://www.";
+        $baseurl = $proto . "://www.";
         $baseurl.=$_SERVER['HTTP_HOST'];
       }
 
@@ -141,10 +142,6 @@ class UserFunctions extends DBHelper
 
     $this->domain = $domain;
     $this->shortUrl = $shorturl;
-
-    $proto = 'http';
-    if ($_SERVER["HTTPS"] == "on") {$proto .= "s";}
-
     $this->qualDomain = $proto . "://" . $shorturl;
 
     # Let's be nice and try to set up a user
@@ -942,7 +939,7 @@ class UserFunctions extends DBHelper
      * @param bool $override
      ***/
 
-    if(strlen($pw_in)>8192)
+    if(strlen($pw)>8192)
       {
         throw(new Exception("Passwords must be less than 8192 characters in length."));
       }
@@ -1000,17 +997,16 @@ class UserFunctions extends DBHelper
                         # Remove the encryption key
                         $query = "UPDATE `".$this->getTable()."` SET `".$this->tmpcol."`='' WHERE `".$this->usercol."`='".$this->username."'";
                         mysqli_query($l,$query);
+                        # Return decrypted userdata, if applicable
+                        # The salt is the password key "salt"
+                        $decname=self::decryptThis($data["salt"].$pw,$userdata['name']);
+                        if(empty($decname))$decname=$userdata['name'];
                         if(!$return)
                           {
-                            # Return decrypted userdata, if applicable
-                            $decname=self::decryptThis($salt.$pw,$userdata['name']);
-                            if(empty($decname))$decname=$userdata['name'];
                             return true;
                           }
                         else
                           {
-                            $decname=self::decryptThis($salt.$pw,$userdata['name']);
-                            if(empty($decname))$decname=$userdata['name'];
                             $returning=array(true,$userdata);
                             return $returning;
                           }
@@ -1314,7 +1310,8 @@ class UserFunctions extends DBHelper
      * data. Otherwise, it appends. Default: true.
      ***/
 
-
+    $vmeta = false;
+    $error = false;
     if(empty($data) || empty($col)) return array('status'=>false,'error'=>'Bad request');
     $validated=false;
     if(is_array($validation_data))
