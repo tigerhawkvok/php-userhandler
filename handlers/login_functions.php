@@ -141,10 +141,10 @@ class UserFunctions extends DBHelper
 
     $this->domain = $domain;
     $this->shortUrl = $shorturl;
-    
+
     $proto = 'http';
     if ($_SERVER["HTTPS"] == "on") {$proto .= "s";}
-    
+
     $this->qualDomain = $proto . "://" . $shorturl;
 
     # Let's be nice and try to set up a user
@@ -927,7 +927,7 @@ class UserFunctions extends DBHelper
 
 
 
-  
+
   public function lookupUser($username,$pw,$return=true,$totp_code=false,$override = false)
   {
     /***
@@ -938,10 +938,10 @@ class UserFunctions extends DBHelper
      * @param string $pw the plaintext password of the user
      * @param bool $return whether to return user data, or just the
      * boolean lookup state
-     * @param bool $totp_code 
+     * @param bool $totp_code
      * @param bool $override
      ***/
-    
+
     if(strlen($pw_in)>8192)
       {
         throw(new Exception("Passwords must be less than 8192 characters in length."));
@@ -1038,7 +1038,7 @@ class UserFunctions extends DBHelper
                       {
                         if(!$userdata['flag'])
                           {
-                            return array(false,"status"=>false,"message"=>'Your login information is correct, but your account is still being validated, or has been disabled. Please try again later.'); 
+                            return array(false,"status"=>false,"message"=>'Your login information is correct, but your account is still being validated, or has been disabled. Please try again later.');
                           }
                         if($userdata['disabled'])
                           {
@@ -1300,6 +1300,21 @@ class UserFunctions extends DBHelper
 
   public function writeToUser($data,$col,$validation_data=null,$replace=true,$alert_forbidden_column = true)
   {
+
+    /***
+     * Write data to a user column.
+     * 
+     * @param string $data the data to be written
+     * @param string $col the database column to be written to
+     * @param array $validation_data data to verify access to the
+     * user. An array of "password"=>$password or manually provided
+     * cookie data with $this->linkcol as the key. If this isn't
+     * provided, cookies are used.
+     * @param bool $replace whether to replace existing
+     * data. Otherwise, it appends. Default: true.
+     ***/
+
+
     if(empty($data) || empty($col)) return array('status'=>false,'error'=>'Bad request');
     $validated=false;
     if(is_array($validation_data))
@@ -1316,8 +1331,8 @@ class UserFunctions extends DBHelper
           {
             # confirm with lookupUser();
             # If TOTP is enabled, this lookup will always fail ...
-            $a=$this->lookupUser($validation_data['username'],$validation_data['password']);
-            $validated=$a[0];
+            $vmeta=$this->lookupUser($validation_data['username'],$validation_data['password']);
+            $validated=$vmeta[0];
             if($validated) $this->getUser(array("username"=>$validation_data['username']));
             $method='Password';
           }
@@ -1387,7 +1402,7 @@ class UserFunctions extends DBHelper
         $r2=mysqli_query($l,$finish_query);
         return array('status'=>$r,'data'=>$data,'col'=>$col,'action'=>$finish_query,'result'=>$r2,'method'=>$method,"error"=>$error);
       }
-    else return array('status'=>false,'error'=>'Bad validation','method'=>$method);
+    else return array('status'=>false,'error'=>'Bad validation','method'=>$method,"validated_meta"=>$vmeta);
   }
 
   public function resetUserPassword()
@@ -1476,7 +1491,7 @@ class UserFunctions extends DBHelper
     if(empty($secret_key))
       {
         require_once(dirname(__FILE__).'/../stronghash/php-stronghash.php');
-        $secret_key = Stronghash::createSalt(strlen($userString));        
+        $secret_key = Stronghash::createSalt(strlen($userString));
       }
     $return['secret'] = $secret_key;
     $auth_code = $secret_key ^ $userString;
@@ -1484,7 +1499,7 @@ class UserFunctions extends DBHelper
     $return['auth'] = $auth_result;
     $return['user'] = $userdata[$this->linkcol];
     return $return;
-    
+
   }
 
   public function requireUserAuth($user_email)
@@ -1598,7 +1613,7 @@ class UserFunctions extends DBHelper
       }
     $ret['status'] = true;
     $mail = $this->getMailObject();
-    
+
     # Let the user know
     $mail->Subject = "Authorization granted to ".$this->getDomain();
     $mail->Body = "<p>Your access to ".$this->getDomain()." as been enabled. <a href='".$this->getQualifiedDomain()."'>Click here to visit the site</a>.";
@@ -1607,7 +1622,7 @@ class UserFunctions extends DBHelper
     $userMail->send();
     # Send out an email to admins saying that they've been authorized.
     $query = "SELECT `".$this->usercol."` FROM ".$this->getTable()." WHERE `admin_flag`=TRUE";
-    $r = mysqli_query($l,$query);    
+    $r = mysqli_query($l,$query);
     $mail->Subject = "[".$this->getDomain()."] New User Authenticated";
     $mail->Body = "<p>".$user_email." was granted access to ".$this->getDomain()." by ".$thisUserEmail.".</p><p>No further action is required, and you can disregard emails asking to grant this user access.</p><p><strong>If you believe this to be in error, immediately take steps to take your site offline</strong></p>";
     while ($row=mysqli_fetch_row($r))
@@ -1625,7 +1640,7 @@ class UserFunctions extends DBHelper
         $ret['error'] = $mail->ErrorInfo;
       }
     return $ret;
-    
+
   }
 
 
