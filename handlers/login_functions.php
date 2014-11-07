@@ -1351,7 +1351,7 @@ class UserFunctions extends DBHelper
         if(empty($user)) return array("status"=>false,"error"=>"Problem assigning user");
         // write it to the db
         // replace or append based on flag
-        $real_col=$this->sanitize($col);
+        $real_col=$this->sanitize($col,true);
         if(!$replace)
           {
             // pull the existing data ...
