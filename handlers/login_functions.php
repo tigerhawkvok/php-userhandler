@@ -122,7 +122,7 @@ class UserFunctions extends DBHelper
 
     $proto = 'http';
     if (isset($_SERVER["HTTPS"]) && $_SERVER["HTTPS"] == "on") {$proto .= "s";}
-    
+
     if(empty($baseurl))
       {
         $baseurl = $proto . "://www.";
@@ -1015,17 +1015,16 @@ class UserFunctions extends DBHelper
                     if(($userdata['flag'] || $override) && !$userdata['disabled'])
                       {
                         # This user is OK and not disabled, nor pending validation
+                        # Return decrypted userdata, if applicable
+                        # The salt is the password key "salt"
+                        $decname=self::decryptThis($data["salt"].$pw,$userdata['name']);
+                        if(empty($decname))$decname=$userdata['name'];
                         if(!$return)
                           {
-                            # Return decrypted userdata, if applicable
-                            $decname=self::decryptThis($salt.$pw,$userdata['name']);
-                            if(empty($decname))$decname=$userdata['name'];
                             return array(true,"status"=>true,$decname);
                           }
                         else
                           {
-                            $decname=self::decryptThis($salt.$pw,$userdata['name']);
-                            if(empty($decname))$decname=$userdata['name'];
                             $returning=array(true,"status"=>true,$userdata);
                             return $returning;
                           }
@@ -1299,7 +1298,7 @@ class UserFunctions extends DBHelper
 
     /***
      * Write data to a user column.
-     * 
+     *
      * @param string $data the data to be written
      * @param string $col the database column to be written to
      * @param array $validation_data data to verify access to the
