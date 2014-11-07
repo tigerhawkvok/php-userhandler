@@ -91,7 +91,17 @@ class DBHelper {
 
   protected function setCols($cols,$dirty_columns = true)
   {
-    if(!is_array($cols)) throw(new Exception("Invalid columns"));
+    if(!is_array($cols))
+      {
+        if(empty($cols))
+          {
+            throw(new Exception("No column data provided"));
+          }
+        else
+          {
+            throw(new Exception("Invalid column data type (needs array)"));
+          }
+      }
     $shadow = array();
     foreach($cols as $col=>$type)
       {
