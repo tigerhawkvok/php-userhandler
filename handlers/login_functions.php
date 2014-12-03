@@ -1007,7 +1007,7 @@ class UserFunctions extends DBHelper
                           }
                         else
                           {
-                            $returning=array(true,$userdata);
+                            $returning=array(true,"status"=>true,$userdata);
                             return $returning;
                           }
                       }

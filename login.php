@@ -76,7 +76,7 @@ $user=new UserFunctions;
 
 #$debug = true;
 
-if($debug==true)
+if($debug === true)
   {
     /*if($r===true) echo "<p>(Database OK)</p>";
       else echo "<p>(Database Error - ' $r ')</p>";*/
@@ -442,7 +442,6 @@ else if($_REQUEST['q']=='create')
     if(!empty($recaptcha_public_key) && !empty($recaptcha_private_key))
       {
 
-        $recaptcha=recaptcha_get_html($recaptcha_public_key);
         $prefill_email = $_POST['username'];
         $prefill_display = $_POST['dname'];
         $prefill_lname = $_POST['lname'];
@@ -493,7 +492,9 @@ else if($_REQUEST['q']=='create')
               </label>
 	      <input type='text' name='honey' id='honey' class='hide'/>
         <p>Please enter both words shown in the prompt below</p>
-              $recaptcha
+        <script src='https://www.google.com/recaptcha/api.js'></script>
+        <div class=\"g-recaptcha\" data-sitekey=\"".$recaptcha_public_key."\"></div>
+
               </div>
               <br class='clear'/>
 	      <input type='submit' value='Create' id='createUser_submit' disabled='disabled'/>
@@ -513,16 +514,20 @@ else if($_REQUEST['q']=='create')
                 $login_ouptut.="<p class='error'>Whoops! You tripped one of our bot tests. If you are not a bot, please go back and try again. Read your fields carefully!</p>";
                 $_POST['email']='bob';
               }
-            $resp = recaptcha_check_answer ($recaptcha_private_key,
-            $_SERVER["REMOTE_ADDR"],
-            $_POST["recaptcha_challenge_field"],
-            $_POST["recaptcha_response_field"]);
-
-            if (!$resp->is_valid && !$debug)
+            # https://developers.google.com/recaptcha/docs/verify
+            $recaptcha_uri = "https://www.google.com/recaptcha/api/siteverify";
+            $recaptcha_params = array(
+              "secret" => $recaptcha_private_key,
+              "response" => $_POST["g-recaptcha-response"],
+              "remoteip" => $_SERVER["REMOTE_ADDR"]
+            );
+            $resp = json_decode(do_post_request($recaptcha_uri,$recaptcha_params),true);
+            
+            if (!$resp["success"] && !$debug)
               {
                 // What happens when the CAPTCHA was entered incorrectly
                 $login_output.=("The reCAPTCHA wasn't entered correctly. Go back and try it again." .
-                "(reCAPTCHA said: " . $resp->error . ")");
+                "(reCAPTCHA said: " . $resp["error-codes"] . ")");
               }
             else
               {
