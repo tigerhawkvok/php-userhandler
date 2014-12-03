@@ -203,4 +203,37 @@ if(!function_exists('displayDebug'))
     }
   }
 
+if(!function_exist("do_post_request"))
+  {
+    function do_post_request($url, $data, $optional_headers = null)
+    {
+      /***
+       * Do a POST request
+       *
+       * @param string $url the destination URL
+       * @param array $data The paramter as key/value pairs
+       * @return response object
+       ***/
+      
+      $params = array('http' => array(
+        'method' => 'POST',
+        'content' => http_build_query($data)
+      ));
+      if ($optional_headers !== null) {
+        $params['http']['header'] = $optional_headers;
+      }
+      $ctx = stream_context_create($params);
+      # If url handlers are set,t his whole next part can be file_get_contents($url,false,$ctx)
+      $fp = @fopen($url, 'rb', false, $ctx);
+      if (!$fp) {
+        throw new Exception("Problem with $url, $php_errormsg");
+      }
+      $response = @stream_get_contents($fp);
+      if ($response === false) {
+        throw new Exception("Problem reading data from $url, $php_errormsg");
+      }
+      return $response;
+    }
+  }
+
 ?>
