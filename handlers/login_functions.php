@@ -1003,7 +1003,7 @@ class UserFunctions extends DBHelper
                         if(empty($decname))$decname=$userdata['name'];
                         if(!$return)
                           {
-                            return true;
+                            return array(true,"status"=>true,$decname);
                           }
                         else
                           {
