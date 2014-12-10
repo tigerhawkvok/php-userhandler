@@ -531,7 +531,29 @@ noSubmit = ->
   event.preventDefault()
   event.returnValue = false
 
+doAsyncLogin = (uri = "async_login_handler.php", respectRelativePath = true) ->
+  noSubmit()
+  if respectRelativePath
+    urlString = url.attr('protocol') + '://' + url.attr('host') + '/' + window.totpParams.subdirectory + uri
+  else
+    urlString = uri  
+  username = $("#username").val()
+  password = $("#password").val()
+  pass64 = Base64.encodeURI(password)
+  args = "action=dologin&username=#{username}&password=#{pass64}&b64=true"
+  # Submit and check the login request
+  false
 
+doAsyncCreate = ->
+  recaptchaResponse = grecaptcha.getResponse()
+  if recaptchaResponse.success isnt true
+    # Bad CAPTCHA
+    $("#createUser_submit").before("<p id='createUser_fail' class='bg-danger'>Sorry, your CAPTCHA was incorrect. Please try again.</p>")
+    grecaptcha.reset()
+    return false
+  $("#createUser_fail").remove()
+  # Submit the user creation
+  false
 
 
 $ ->
