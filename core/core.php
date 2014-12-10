@@ -203,7 +203,7 @@ if(!function_exists('displayDebug'))
     }
   }
 
-if(!function_exist("do_post_request"))
+if(!function_exists("do_post_request"))
   {
     function do_post_request($url, $data, $optional_headers = null)
     {
