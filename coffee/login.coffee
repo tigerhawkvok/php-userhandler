@@ -149,12 +149,12 @@ doTOTPRemove = ->
   noSubmit()
   animateLoad()
   user = $("#username").val()
-  pass = $("#password").val()
+  pass = encodeURIComponent($("#password").val())
   code = $("#code").val()
   url = $.url()
   ajaxLanding = "async_login_handler.php"
   urlString = url.attr('protocol') + '://' + url.attr('host') + '/' + window.totpParams.subdirectory + ajaxLanding
-  args = "action=removetotp&code=#{code}&username=#{user}&password=#{pass}"
+  args = "action=removetotp&code=#{code}&username=#{user}&password=#{pass}&base64=true"
   remove_totp = $.get(urlString,args,'json')
   remove_totp.done (result) ->
     # Check the result
@@ -164,6 +164,7 @@ doTOTPRemove = ->
       .addClass("error")
       console.error(result.error)
       console.warn("#{urlString}?#{args}")
+      console.warn(result)
       stopLoadError()
       return false
     # Removed!
