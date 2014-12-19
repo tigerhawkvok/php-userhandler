@@ -155,7 +155,7 @@ doTOTPRemove = ->
   ajaxLanding = "async_login_handler.php"
   urlString = url.attr('protocol') + '://' + url.attr('host') + '/' + window.totpParams.subdirectory + ajaxLanding
   args = "action=removetotp&code=#{code}&username=#{user}&password=#{pass}&base64=true"
-  remove_totp = $.get(urlString,args,'json')
+  remove_totp = $.post(urlString,args,'json')
   remove_totp.done (result) ->
     # Check the result
     unless result.status is true
