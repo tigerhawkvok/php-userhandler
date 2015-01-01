@@ -137,7 +137,7 @@ try
   $phone_verify_template = "<form id='verify_phone' onsubmit='event.preventDefault();'>
   <input type='tel' id='phone' name='phone' value='".$user->getPhone()."' readonly='readonly'/>
   <input type='hidden' id='username' name='username' value='".$user->getUsername()."'/>
-  <button id='verify_phone_button'>Verify Phone Now</button>
+  <button id='verify_phone_button' class='btn btn-primary'>Verify Phone Now</button>
   <p>
     <small>
       <a href='#' id='verify_later'>
@@ -195,7 +195,7 @@ catch(Exception $e)
   {
     $has2fa = false;
   }
-$settings_blob = "<section id='account_settings'><h2>Settings</h2><ul id='settings_list'><li><a href='#' id='showAdvancedOptions' data-domain='$domain' data-user-tfa='".$has2fa."'>Account Settings</a></li>".$verifyphone_link.$random."</ul></section>";
+$settings_blob = "<section id='account_settings'><h2>Settings</h2><ul id='settings_list'><li><a href='#' id='showAdvancedOptions' data-domain='$domain' data-user-tfa='".$has2fa."' role='button' class='btn btn-default'>Account Settings</a></li>".$verifyphone_link.$random."</ul></section>";
 
 $login_output.="<div id='login_block'>";
 $alt_forms="<div id='alt_logins'>
@@ -219,7 +219,7 @@ $loginform = "
 	      <input type='password' name='password' id='password' placeholder='Password' required='required'/>
 </fieldset>";
 $loginform_close="	      <br/>
-	      <input type='submit' value='Login' id='login_button'/>
+	      <button id='login_button' class='btn btn-primary'>Login</button>
 	    </form>$alt_forms<br/><p id='form_create_new_account'><small>Don't have an account yet? <a href='?q=create'>Create one</a>!</small></p>";
 $big_login=$login_preabmle.$loginform.$loginform_close;
 $small_login=$loginform.$loginform_close;
@@ -248,7 +248,7 @@ if($_REQUEST['q']=='submitlogin')
       <input type='hidden' id='hash' name='hash' value='".$hash."'/>
       <input type='hidden' id='remote' name='remote' value='".$_SERVER['REMOTE_ADDR']."'/>
       <input type='hidden' id='encrypted' name='encrypted' value='".$user->strbool($is_encrypted)."'/>
-      <button id='verify_totp_button' class='totpbutton'>Verify</button>
+      <button id='verify_totp_button' class='totpbutton btn btn-primary'>Verify</button>
     </fieldset>
     <p><small><a href='#' id='alternate_verification_prompt'>I can't use my app</a></small></p>
   </form>
@@ -496,7 +496,7 @@ else if($_REQUEST['q']=='create')
 
               </div>
               <br class='clear'/>
-	      <input type='submit' value='Create' id='createUser_submit' disabled='disabled'/>
+	      <button id='createUser_submit' class='btn btn-success' disabled='disabled'>Create</button>
 	    </form><br class='clear'/>";
         $secnotice="<p><small>Remember your security best practices! Do not use the same password you use for other sites. While your information is <a href='http://en.wikipedia.org/wiki/Cryptographic_hash_function' $newwindow>hashed</a> with a multiple-round hash function, <a href='http://arstechnica.com/security/2013/05/how-crackers-make-minced-meat-out-of-your-passwords/' $newwindow>passwords are easy to crack!</a></small></p>";
         $createform.=$secnotice; # Password security notice
@@ -581,7 +581,7 @@ else if($_REQUEST['q']=='create')
                                     $phone_verify_template = "<form id='verify_phone' onsubmit='event.preventDefault();'>
   <input type='tel' id='phone' name='phone' value='".$user->getPhone()."' readonly='readonly'/>
   <input type='hidden' id='username' name='username' value='".$user->getUsername()."'/>
-  <button id='verify_phone_button'>Verify Phone Now</button>
+  <button id='verify_phone_button' class='btn btn-primary'>Verify Phone Now</button>
   <p>
     <small>
       <a href='#' id='verify_later'>
@@ -605,7 +605,7 @@ else if($_REQUEST['q']=='create')
       <input type='password' id='password' name='password'/><br/>
       <input type='hidden' id='secret' name='secret' value='".$_COOKIE[$cookiekey]."'/>
       <input type='hidden' id='hash' name='hash' value='".$_COOKIE[$cookieauth]."'/>
-      <button id='add_totp_button' class='totpbutton'>Add Two-Factor Authentication</button>
+      <button id='add_totp_button' class='totpbutton btn btn-primary'>Add Two-Factor Authentication</button>
     </fieldset>
   </form>
   <a href='#' id='totp_help'>Help with Two-Factor Authentication</a>
@@ -669,7 +669,7 @@ else if(isset($_REQUEST['2fa']))
       <input type='password' id='password' name='password'/><br/>
       <input type='hidden' id='secret' name='secret' value='".$_COOKIE[$cookiekey]."'/>
       <input type='hidden' id='hash' name='hash' value='".$_COOKIE[$cookieauth]."'/>
-      <button id='add_totp_button' class='totpbutton'>Add Two-Factor Authentication</button>
+      <button id='add_totp_button' class='totpbutton btn btn-primary'>Add Two-Factor Authentication</button>
     </fieldset>
   </form>
   <a href='#' id='totp_help'>Help with Two-Factor Authentication</a>
@@ -688,7 +688,7 @@ else if(isset($_REQUEST['2fa']))
       <input type='email' value='".$user->getUsername()."' readonly='readonly' id='username' name='username'/><br/>
       <input type='password' id='password' name='password' placeholder='Password'/><br/>
       <input type='text' id='code' name='code' placeholder='Authenticator Code or Backup Code' size='32' maxlength='32' autocomplete='off'/><br/>
-      <button id='remove_totp_button' class='totpbutton'>Remove Two-Factor Authentication</button>
+      <button id='remove_totp_button' class='totpbutton btn btn-danger'>Remove Two-Factor Authentication</button>
     </fieldset>
   </form>
 </section>";
@@ -711,7 +711,7 @@ else if(isset($_REQUEST['2fa']))
 else
   {
     if(!$logged_in) $login_output.=$login_preamble . $loginform.$loginform_close;
-    else $login_output.="<p id='signin_greeting'>Welcome back, $first_name</p><br/><p id='logout_para'><aside class='ssmall'><a href='?q=logout'>(Logout)</a></aside></p>".$settings_blob."<button id='next' name='next'>Continue &#187;</button>";
+    else $login_output.="<p id='signin_greeting'>Welcome back, $first_name</p><br/><p id='logout_para'><aside class='ssmall'><a href='?q=logout'>(Logout)</a></aside></p>".$settings_blob."<button id='next' name='next' class='btn btn-default'>Continue &#187;</button>";
   }
 $login_output.="</div>";
 ob_end_flush();

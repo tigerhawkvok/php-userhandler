@@ -1350,17 +1350,17 @@ class UserFunctions extends DBHelper
         $real_col=$this->sanitize($col,true);
         if(!$replace)
           {
-            // pull the existing data ...
+            # pull the existing data ...
             $l=$this->openDB();
             $prequery="SELECT `$real_col` FROM `".$this->getTable()."` WHERE `$where_col`='$user'";
-            // Look for relevent JSON entries or XML entries and replace them
+            # Look for relevent JSON entries or XML entries and replace them
             $r=mysqli_query($l,$prequery);
             $row=mysqli_fetch_row($r);
             $d=$row[0];
             $jd=json_decode($d,true);
             if($jd==null)
               {
-                // XML -- only takes one tag in!!
+                # XML -- only takes one tag in!!
                 $xml_data=explode("</",$data);
                 $tag=array_pop($xml_data);
                 $tag=$this->sanitize(substr($tag,0,-1));
@@ -1401,13 +1401,33 @@ class UserFunctions extends DBHelper
     else return array('status'=>false,'error'=>'Bad validation','method'=>$method,"validated_meta"=>$vmeta);
   }
 
-  public function resetUserPassword()
+  public function resetUserPassword($totp = null, $method = null)
   {
     /***
      * Set up the password reset functionality.
      * Without a flag, just send an email to the address on file with a reset link.
-     * With a flag, validate the new password data and reset authentication, then invoke changeUserPassword().
+     * With a flag, validate the new password data and reset
+     * authentication, then invoke changeUserPassword().
      ***/
+     # If the user has 2FA set up, first prompt for the code
+        if($this->has2FA() && $totp == null)
+          {
+        $callback = array("status"=>false,"action"=>"GET_TOTP","canSMS"=>$this->canSMS());
+        return $callback;
+        }
+        else
+          {
+        if($this->has2FA())
+          {
+        # Verify the 2FA
+        }
+        if($this>canSMS() && $method == null)
+          {
+        $callback = array("status"=>false,"action"=>"NEED_METHOD");
+        return $callback;        
+        }
+        # If the user has SMS and email, check $method
+        }
   }
 
   public function doUpdatePassword()
