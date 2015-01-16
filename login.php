@@ -728,6 +728,7 @@ else
   {
     if(!$logged_in) $login_output.=$login_preamble . $loginform.$loginform_close;
     else $login_output.="<p id='signin_greeting'>Welcome back, $first_name</p><br/><p id='logout_para'><aside class='ssmall'><a href='?q=logout'>(Logout)</a></aside></p>".$settings_blob."<button id='next' name='next' class='btn btn-default'>Continue &#187;</button>";
+    $deferredJS .= "\n$(\"#next\").click(function(){window.location.href=\"".$durl."\";});";
   }
 $login_output.="</div>";
 ob_end_flush();
