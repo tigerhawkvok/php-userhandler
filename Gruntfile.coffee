@@ -62,8 +62,8 @@ module.exports = (grunt) ->
           "js/loadJQuery.min.js": ["js/loadJQuery.js"]
     cssmin:
       dist:
-        src:["css/main.css"]
-        dest:"css/main.min.css"
+        src:["css/otp_panels.css","css/otp_styles.css"]
+        dest:"css/otp.min.css"
     coffee:
       compile:
         options:
