@@ -142,7 +142,7 @@ class UserFunctions extends DBHelper
 
     $this->domain = $domain;
     $this->shortUrl = $shorturl;
-    $this->qualDomain = $proto . "://" . $shorturl;
+    $this->qualDomain = $proto . "://" . $shorturl . "/";
 
     # Let's be nice and try to set up a user
     try
