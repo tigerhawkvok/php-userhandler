@@ -1630,6 +1630,7 @@ class UserFunctions extends DBHelper
       {
         $ret['status'] = true;
         $ret['message'] = "Already authenticated";
+        return $ret;
       }
     $working_key = base64_decode(urldecode($encoded_key));
     $key = self::decryptThis($thisUserdata[$this->linkcol],$working_key);
