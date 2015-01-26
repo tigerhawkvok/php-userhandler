@@ -28,14 +28,14 @@ checkPasswordLive = (selector = "#createUser_submit") ->
   if pass.length >window.passwords.overrideLength or pass.match(re)
     $("#password")
     .css("background",window.passwords.goodbg)
-    .parent().removeClass("has-error")
+    .parent().parent().removeClass("has-error")
     .addClass("has-success")
     $("#feedback-status-1").replaceWith("<span id='feedback-status-1' class='glyphicon glyphicon-ok form-control-feedback' aria-hidden='true'></span>")
     window.passwords.basepwgood = true
   else
     $("#password")
     .css("background",window.passwords.badbg)
-    .parent().removeClass("has-success")
+    .parent().parent().removeClass("has-success")
     .addClass("has-error")
     $("#feedback-status-1").replaceWith("<span id='feedback-status-1' class='glyphicon glyphicon-remove form-control-feedback' aria-hidden='true'></span>")
     window.passwords.basepwgood = false
@@ -49,14 +49,14 @@ checkMatchPassword = (selector = "#createUser_submit") ->
   if $("#password").val() is $("#password2").val()
     $('#password2')
     .css('background', window.passwords.goodbg)
-    .parent().removeClass("has-error")
+    .parent().parent().removeClass("has-error")
     .addClass("has-success")
     $("#feedback-status-2").replaceWith("<span id='feedback-status-2' class='glyphicon glyphicon-ok form-control-feedback' aria-hidden='true'></span>")
     window.passwords.passmatch = true
   else
     $('#password2')
     .css('background', window.passwords.badbg)
-    .parent().removeClass("has-success")
+    .parent().parent().removeClass("has-success")
     .addClass("has-error")
     $("#feedback-status-2").replaceWith("<span id='feedback-status-2' class='glyphicon glyphicon-remove form-control-feedback' aria-hidden='true'></span>")
     window.passwords.passmatch = false
@@ -737,14 +737,14 @@ $ ->
       checkPasswordLive()
     $("#password")
     .after("<span id='feedback-status-1'></span>")
+    .parent().removeClass("form-inline")
     .parent().addClass("has-feedback")
-    .removeClass("form-inline")
-    .parent().addClass("form-inline")
+    .parent().addClass("form-horizontal")
     $("#password2")
     .after("<span id='feedback-status-2'></span>")
+    .parent().removeClass("form-inline")
     .parent().addClass("has-feedback")
-    .removeClass("form-inline")
-    .parent().addClass("form-inline")
+    .parent().addClass("form-horizontal")
   $("#totp_submit").submit ->
     doTOTPSubmit()
   $("#verify_totp_button").click ->
