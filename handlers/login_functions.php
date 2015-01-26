@@ -1619,9 +1619,13 @@ class UserFunctions extends DBHelper
     try
       {
         $thisUserdata = $this->validateUser(true);
-        if($thisUserdata["status"] === false)
+        if($thisUserdata["status"] !== true)
           {
             throw(new Exception("User failed validation"));
+          }
+        if(boolstr($thisUserdata["admin_flag"]) !== true)
+          {
+            throw(new Exception("You must be logged in with an administrative user account to authorize a new user."));
           }
       }
     catch(Exception $e)
