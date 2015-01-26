@@ -1,7 +1,7 @@
 <?php
 /***
  * This is designed to be included in a page, and doesn't have the
- * page framework on its own. 
+ * page framework on its own.
  * Be sure after including this file to output the variable
  *   $login_output
  * If you want a display!
@@ -453,7 +453,8 @@ else if($_REQUEST['q']=='create')
         $prefill_lname = $_POST['lname'];
         $prefill_fname = $_POST['fname'];
         $createform = "<style type='text/css'>.hide { display:none !important; }</style>
-              <div id='password_security'>
+<link rel='stylesheet' type='text/css' href='".$relative_path."bower_components/bootstrap/dist/css/bootstrap.min.css'/>
+              <div id='password_security' class='bs-callout bs-callout-info invisible'>
 
               </div>
 	    <form id='login' method='post' action='?q=create&amp;s=next' class='form-horizontal'>
@@ -472,7 +473,7 @@ else if($_REQUEST['q']=='create')
 	      <input class='create form-control password-input' type='password' name='password' id='password' placeholder='Password' required='required' aria-describedby='passText'/>
 </div>
 	      </div></div>
-<span id='helpText' class='help-block'>Check the sidebar to the right for the password requirements and your current password's status.</span>
+<span id='helpText' class='help-block invisible'>Check the sidebar to the right for the password requirements and your current password's status.</span>
 <div><div class='form-group'>
 	      <label class='col-sm-3 col-md-2 control-label' for='password2'>
 		Confirm Password:
@@ -542,7 +543,7 @@ else if($_REQUEST['q']=='create')
               "remoteip" => $_SERVER["REMOTE_ADDR"]
             );
             $resp = json_decode(do_post_request($recaptcha_uri,$recaptcha_params),true);
-            
+
             if (!$resp["success"] && !$debug)
               {
                 // What happens when the CAPTCHA was entered incorrectly

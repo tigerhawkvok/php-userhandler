@@ -426,9 +426,10 @@ toggleNewUserSubmit = function(selector) {
 evalRequirements = function() {
   var green_channel, html, moz_css, new_end, notice, pass, pstrength, red_channel, webkit_css;
   if (!$("#strength-meter").exists()) {
-    html = "<div id='strength-meter'><div id='strength-requirements'><p style='float:left;margin-top:2em'>Character Classes:</p><div id='strength-alpha'><p class='label'>a</p><div class='strength-eval'></div></div><div id='strength-alphacap'><p class='label'>A</p><div class='strength-eval'></div></div><div id='strength-numspecial'><p class='label'>1/!</p><div class='strength-eval'></div></div></div><div id='strength-bar'><label for='password-strength'>Strength: </label><progress id='password-strength' max='5'></progress><p>Time to crack: <span id='crack-time'></span></p></div></div>";
-    notice = "<p><small>We require a password of at least " + window.passwords.minLength + " characters with at least one upper case letter, at least one lower case letter, and at least one digit or special character. You can also use <a href='http://imgs.xkcd.com/comics/password_strength.png'>any long password</a> of at least " + window.passwords.overrideLength + " characters, with no security requirements.</small></p>";
-    $("#password_security").html(html + notice);
+    html = "<h4>Password Requirements</h4><div id='strength-meter'><div id='strength-requirements'><p style='float:left;margin-top:2em;font-weight:700;'>Character Classes:</p><div id='strength-alpha'><p class='label'>a</p><div class='strength-eval'></div></div><div id='strength-alphacap'><p class='label'>A</p><div class='strength-eval'></div></div><div id='strength-numspecial'><p class='label'>1/!</p><div class='strength-eval'></div></div></div><div id='strength-bar'><label for='password-strength'>Strength: </label><progress id='password-strength' max='5'></progress><p>Time to crack: <span id='crack-time'></span></p></div></div>";
+    notice = "<br/><br/><p>We require a password of at least " + window.passwords.minLength + " characters with at least one upper case letter, at least one lower case letter, and at least one digit or special character.</p><p>You can also use <a href='http://imgs.xkcd.com/comics/password_strength.png'>any long password</a> of at least " + window.passwords.overrideLength + " characters, with no security requirements.</p>";
+    $("#password_security").html(html + notice).removeClass('invisible');
+    $("#helpText").removeClass("invisible");
   }
   pass = $("#password").val();
   pstrength = zxcvbn(pass);
