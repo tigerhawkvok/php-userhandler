@@ -1119,6 +1119,13 @@ class UserFunctions extends DBHelper
      * @param bool $detail Provide detailed returns
      * @return bool|array bool if $detail is false, array if $detail is true
      ***/
+    if($userid === true)
+      {
+        # We are short-cutting getting the details back for the
+        # current user
+        $userid = null;
+        $detail = true;
+      }
     if(strpos($userid,"@")===false && !empty($userid)) $userid = array($this->linkcol=>$userid);
     try
       {
@@ -1545,8 +1552,7 @@ class UserFunctions extends DBHelper
     # get all the administrative users, and encrypt the key with their
     # user DB link
 
-    $mail = $this->getMailObject();
-    $mail->Subject = "[".$this->getDomain()."] New User - Authentication Needed";
+    $mail_subject = "[".$this->getDomain()."] New User - Authentication Needed";
     $success = false;
     # Loop through all the admins ....
     $l = $this->openDB();
@@ -1574,12 +1580,13 @@ class UserFunctions extends DBHelper
         $encoded_key = urlencode(base64_encode($cryptkey));
         $admin_link = $link . $encoded_key;
         $destinations[] = array("to"=>$to,"key"=>$encoded_key,"crypted"=>$cryptkey,"encrypted_with"=>$dblink,"emailed_link"=>$admin_link);
-        $mailcopy = $mail;
+        $mail = $this->getMailObject();
+        $mail->Subject = $mail_subject;
         $body="<p>".$user_email." is requesting access to ".$this->getDomain().".</p><p>To authorize them, clik this link:</p><p><a href='".$admin_link."'>Click here to authorize ".$user_email."</a></p><p>Thank you. This message will only work for ".$to.".</p>";
-        $mailcopy->Body = $body;
-        $mailcopy->addAddress($to);
+        $mail->Body = $body;
+        $mail->addAddress($to);
         # If this works even once, we want to tell the user it worked
-        if($mailcopy->send())
+        if($mail->send())
           {
             # if($success === false) $success = true;
             $i++;
@@ -1611,7 +1618,11 @@ class UserFunctions extends DBHelper
     $ret = array();
     try
       {
-        $thisUserdata = $this->getUser();
+        $thisUserdata = $this->validateUser(true);
+        if($thisUserdata["status"] === false)
+          {
+            throw(new Exception("User failed validation"));
+          }
       }
     catch(Exception $e)
       {
@@ -1643,10 +1654,10 @@ class UserFunctions extends DBHelper
         $ret['status'] = false;
         $ret['message'] = "Bad token";
         $ret['provided_token'] = $token;
-        $ret['encoded_key'] = urldecode($encoded_key);
-        $ret['key_to_decrypt'] = $working_key;
-        $ret['decryption_user'] = $userdata[$this->linkcol];
-        $ret['decrypted_key'] = $key;
+        /* $ret['encoded_key'] = urldecode($encoded_key); */
+        /* $ret['key_to_decrypt'] = $working_key; */
+        /* $ret['decryption_user'] = $userdata[$this->linkcol]; */
+        /* $ret['decrypted_key'] = $key; */
         $ret['components'] = $components;
         return $ret;
       }
@@ -1671,6 +1682,7 @@ class UserFunctions extends DBHelper
     # Send out an email to admins saying that they've been authorized.
     $query = "SELECT `".$this->usercol."` FROM ".$this->getTable()." WHERE `admin_flag`=TRUE";
     $r = mysqli_query($l,$query);
+    $mail = $this->getMailObject();
     $mail->Subject = "[".$this->getDomain()."] New User Authenticated";
     $mail->Body = "<p>".$userdata[$this->usercol]." was granted access to ".$this->getDomain()." by ".$thisUserEmail.".</p><p>No further action is required, and you can disregard emails asking to grant this user access.</p><p><strong>If you believe this to be in error, immediately take steps to take your site offline</strong></p>";
     while ($row=mysqli_fetch_row($r))
