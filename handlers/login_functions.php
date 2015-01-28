@@ -206,6 +206,20 @@ class UserFunctions extends DBHelper
       }
     return empty($userdata[$this->totpcol]) ? false:$userdata[$this->totpcol];
   }
+
+  private function setTempSecret($secret)
+  {
+    $userdata = $this->getUser();
+    $l = $this->openDB();
+    $query = "UPDATE `".$this->getTable()."` SET `".$this->tmpcol."`='$secret' WHERE `".$this->usercol."`='".$this->getUsername()."'";
+    $r = mysqli_query($l,$query);
+    if ($r === false)
+    {
+      return array("status"=>false,"error"=>mysqli_error($l));
+    }
+    return array("status"=>true);
+  }
+
   public function has2FA()
   {
     $userdata = $this->getUser();
@@ -437,6 +451,14 @@ class UserFunctions extends DBHelper
 
   public function checkTOTP($provided)
   {
+    /***
+     * Check the TOTP code provided by the user.
+     * In all but exceptional circumstances, this should be the
+     * function used.
+     *
+     * @param int $provided Provided TOTP passcode
+     * @return bool
+     ***/
     return $this->verifyTOTP($provided);
   }
 
@@ -1409,7 +1431,7 @@ class UserFunctions extends DBHelper
     else return array('status'=>false,'error'=>'Bad validation','method'=>$method,"validated_meta"=>$vmeta);
   }
 
-  public function resetUserPassword($totp = null, $method = null)
+  public function resetUserPassword($method = null, $totp = null)
   {
     /***
      * Set up the password reset functionality.
@@ -1417,27 +1439,114 @@ class UserFunctions extends DBHelper
      * With a flag, validate the new password data and reset
      * authentication, then invoke changeUserPassword().
      ***/
-     # If the user has 2FA set up, first prompt for the code
-        if($this->has2FA() && $totp == null)
-          {
-        $callback = array("status"=>false,"action"=>"GET_TOTP","canSMS"=>$this->canSMS());
-        return $callback;
-        }
-        else
-          {
-        if($this->has2FA())
-          {
+    # If the user has 2FA set up, first prompt for the code
+    try
+    {
+      $userdata = $this->getUser();
+    }
+    catch(Exception $e)
+    {
+      $callback = array("status"=>false,"action"=>"BAD_USER");
+      return $callback;
+    }
+    if($this->has2FA() && $totp == null)
+    {
+      $callback = array("status"=>false,"action"=>"GET_TOTP","canSMS"=>$this->canSMS());
+      return $callback;
+    }
+    else
+    {
+      if($this->has2FA())
+      {
         # Verify the 2FA
+        if(!$this->checkTOTP($totp))
+        {
+          return array("status"=>false, "action"=>"BAD_TOTP");
         }
-        if($this>canSMS() && $method == null)
-          {
-        $callback = array("status"=>false,"action"=>"NEED_METHOD");
+      }
+      # We want to do a soft canSMS check, first.
+      if($this->canSMS(false) && empty($method))
+      {
+        # The system can SMS, but can the user?
+        if($this->canSMS())
+        {
+          # The user can SMS and no method is supplied
+          $callback = array("status"=>false,"action"=>"NEED_METHOD");
+          return $callback;
+        }
+      }
+      else if(!$this->canSMS(false) and empty($method))
+      {
+        # If the system can't SMS, and there's no method, assume email
+        $method = "email";
+      }
+      else if(!$this->canSMS() and $method == "sms") 
+      {
+        # The system can SMS but the user isn't verified, but asked
+        # for SMS verification.
+        $callback = array("status"=>false,"action"=>"SMS_NOT_VERIFIED");
         return $callback;
+      }
+      # Calculate out the secrets
+      /*
+       * We want a multi-part secret here. So, we create a random
+       * string and random 8-character key.
+       *
+       * We give the user the
+       * substr(hash('md5',salt.$rand_string),0,8) and the key
+       *
+       * We encrypt the $rand_string with $key and stash it in
+       * $this->tmpcol .
+       *
+       * When it comes time to verify the reset, we decrypt
+       * $this->tmpcol and compare the first 8 characters of the md5.
+       */
+      require_once(dirname(__FILE__).'/../core/stronghash/php-stronghash.php');
+      $rand_string = Stronghash::createSalt();
+      $key = Stronghash::createSalt(8);
+      $pw_data = json_decode($userdata[$this->pwcol],true);
+      $salt = $pw_data["salt"];
+      $user_verify_token = substr(hash('md5',$salt.$rand_string),0,8);
+      $encrypted_secret = self::encryptThis($key,$rand_string);
+      $this->setTempSecret($encrypted_secret);
+      # These tokens are the ones we'll send to the user
+      $user_tokens = array("key"=>$key,"verify"=>$user_verify_token);
+      
+      # If the user has SMS and email, check $method
+      if($method == "email")
+      {
+        # Reset by email
+        include(dirname(__FILE__)."/../CONFIG.php");
+        $url = empty($login_url) ? "login.php":$login_url;
+        $rel_dir = str_replace($relative_path,$working_subdirectory,"") . "/";
+        $email_link = $this->getQualifiedDomain() . $rel_dir . $url ."?key=".urlencode($user_tokens["key"])."&verify=".urlencode($user_tokens["verify"]);
+        $mail = $this->getMailObject();
+        $mail->Subject = $this->getDomain() . " Account Reset";
+        $mail->Body = "<p>You've requested to reset the password to ".$this->getDomain().". Click or copy-paste the link below to reset your password.</p><pre><a href='".$email_link."'>".$email_link."</a></pre><p>If you didn't request a password change, you can ignore this email.</p>.";
+        $mail->addAddresses($this->getUsername());
+        $status = $mail->send();
+        $callback = array("status"=>$status,"method"=>"email");
+        if(!$status)
+        {
+          $callback["error"] = $mail->ErrorInfo;
         }
-        # If the user has SMS and email, check $method
-        }
+        return $callback;
+      }
+      else if ($method == "sms")
+      {
+        # Reset by text
+        $sms_message = "At the reset password prompt, for KEY enter ".$user_tokens["key"]." , and for VERIFY enter ".$user_tokens["verify"];
+        $t_obj = $this->textUser($sms_message);
+        return array("status"=>true,"method"=>"sms","twilio"=>$t_obj);
+      }
+      else
+      {
+        # Bad reset method
+        $callback = array("status"=>false,"action"=>"INVALID_METHOD");
+      }
+    }
   }
-
+  
   public function doUpdatePassword()
   {
     /***
@@ -1446,14 +1555,42 @@ class UserFunctions extends DBHelper
      ***/
   }
 
-  private function changeUserPassword($isResetPassword = false)
+  private function changeUserPassword($oldPassword,$newPassword = null,$isResetPassword = false)
   {
     /***
      * Replace the password stored.
      * If there are any encrypted fields, decrypt them and re-encrypt them in the process.
      * Trash the encrypted fields if we're resetting.
      * Update the cookies.
+     *
+     * @param string|array $oldPassword If the password is being
+     *                                  reset, then $oldPassword
+     *                                  should be an array with the
+     *                                  keys "key" and
+     *                                  "verify". Otherwise, it should
+     *                                  be the plain-text string of
+     *                                  the old password.
+     * @param string $newPassword If $isResetPassword is true, this
+     *                            field is ignored.
+     * @param bool $isResetPassword Is the password being reset?
      ***/
+     try
+       {
+        if($isResetPassword === true)
+          {
+            # We can't verify the old password, so we have to verify the
+            # reset token provided under $oldPassword instead
+          }
+       else
+         {
+            $currentUser = $this->lookupUser($this->getUsername(),$oldPassword);
+          }
+          }
+     catch(Exception $e)
+       {
+          # Bad user
+          throw(new Exception("Invalid user credentials"));
+       }
   }
 
   public function removeThisAccount($username,$password,$totp = false)
@@ -1468,13 +1605,12 @@ class UserFunctions extends DBHelper
      ***/
     $userdata = $this->getUser();
     if($this->getUsername() != $username) return array("status"=>false,"error"=>"Nonmatching names");
-    $where = "WHERE `".$this->usercol."`='".$this->getUsername()."'";
     $l = $this->openDB();
     if(is_numeric($totp))
       {
         require_once(dirname(__FILE__).'/../core/stronghash/php-stronghash.php');
         $key = Stronghash::createSalt();
-        $query = "UPDATE `".$this->getTable()."` SET `".$this->tmpcol."`='$key' WHERE `".$this->usercol."`='".$this->username."'";
+        $query = "UPDATE `".$this->getTable()."` SET `".$this->tmpcol."`='$key' WHERE `".$this->usercol."`='".$this->getUsername()."'";
         $r = mysqli_query($l,$query);
         if($r === false) throw(new Exception("Unable to encrypt password"));
         # Play nice with lookupUser
@@ -1593,8 +1729,8 @@ class UserFunctions extends DBHelper
           }
         else
           {
-            $errors[$to] = $mailcopy->ErrorInfo;
-            $lasterror = $mailcopy->ErrorInfo;
+            $errors[$to] = $mail->ErrorInfo;
+            $lasterror = $mail->ErrorInfo;
           }
         $j++;
       }
