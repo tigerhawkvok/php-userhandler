@@ -1026,11 +1026,11 @@ class UserFunctions extends DBHelper
                         if(empty($decname))$decname=$userdata['name'];
                         if(!$return)
                           {
-                            return array(true,"status"=>true,$decname);
+                              return array(true,$decname,"status"=>true);
                           }
                         else
                           {
-                            $returning=array(true,"status"=>true,$userdata);
+                              $returning=array(true,$userdata,"status"=>true,"data"=>$userdata);
                             return $returning;
                           }
                       }
@@ -1044,11 +1044,11 @@ class UserFunctions extends DBHelper
                         if(empty($decname))$decname=$userdata['name'];
                         if(!$return)
                           {
-                            return array(true,"status"=>true,$decname);
+                              return array(true,$decname,"status"=>true);
                           }
                         else
                           {
-                            $returning=array(true,"status"=>true,$userdata);
+                              $returning=array(true,$userdata,"status"=>true,"data"=>$userdata);
                             return $returning;
                           }
                       }
@@ -1081,11 +1081,11 @@ class UserFunctions extends DBHelper
                           {
                             $decname=self::decryptThis($salt.$pw,$userdata['name']);
                             if(empty($decname))$decname=$userdata['name'];
-                            return array(true,"status"=>true,$decname);
+                            return array(true,$decname,"status"=>true);
                           }
                         else
                           {
-                            $returning=array(true,"status"=>true,$userdata);
+                              $returning=array(true,$userdata,"status"=>true,"data"=>$userdata);
                             return $returning;
                           }
                       }
@@ -1560,22 +1560,54 @@ class UserFunctions extends DBHelper
 
   public function doUpdatePassword($passwordBlob, $isResetPassword = false)
   {
-    /***
-     * If the user requested to update their password, do a check on their
-     * authentication, then invoke changeUserPassword()
-     ***/
-    if($isResetPassword === true)
-    {
+      /***
+       * If the user requested to update their password, do a check on their
+       * authentication, then invoke changeUserPassword()
+       *
+       * @param string|array $passwordBlob If the password is being
+       *                                  reset, then $passwordBlob
+       *                                  should be an array with the
+       *                                  keys "key" and
+       *                                  "verify". Otherwise, it should
+       *                                  be an array with keys "old"
+       *                                  and "new".
+       ***/
       try
       {
-        return $this->changeUserPassword($passwordBlob,null,true);
+          if(!is_array($passwordBlob)) throw(new Exception("Invalid password object (should be array)"));
+          if($isResetPassword === true)
+          {
+              try
+              {
+                  return $this->changeUserPassword($passwordBlob,null,true);
+              }
+              catch(Exception $e)
+              {
+                  # Handle the exception
+              }
+
+          }
+          else
+          {
+              # We're updating, not restting the password.
+              try
+              {
+                  if(!array_key_exists("old",$passwordBlob) or !array_key_exists("new",$passwordBlob)) throw(new Exception("Password object requires keys 'old' and 'new'"));
+                  $oldPassword = $passwordBlob["old"];
+                  $newPassword = $passwordBlob["new"];
+                  return $this->changeUserPassword($oldPassword,$newPassword);
+              }
+              catch (Exception $e)
+              {
+                  # Handle the exception
+              }
+          }
       }
       catch(Exception $e)
       {
-        # Handle the exception
+          # All top-level exceptions
+          return array("status"=>false,"error"=>$e->getMessage(),"given"=>$passwordBlob,"usingResetPassword"=>$isResetPassword);
       }
-
-    }
   }
 
   private function changeUserPassword($oldPassword,$newPassword = null,$isResetPassword = false)
@@ -1644,7 +1676,7 @@ class UserFunctions extends DBHelper
           * validation, which we don't have by definition, so we're
           * going to manually construct the query here.
           */
-         $query="UPDATE `".$this->getTable()."` SET `".$this->$pwcol."`=\"".$this->sanitize()."\", `data`=\"".$data."\" WHERE `".$this->usercol."`='".$this->getUsername()."'";
+         $query="UPDATE `".$this->getTable()."` SET `".$this->$pwcol."`=\"".$this->sanitize($pw_store)."\", `data`=\"".$data."\" WHERE `".$this->usercol."`='".$this->getUsername()."'";
          $l=$this->openDB();
          mysqli_query($l,'BEGIN');
          $r=mysqli_query($l,$query);
@@ -1660,7 +1692,53 @@ class UserFunctions extends DBHelper
        }
        else
        {
-         $currentUser = $this->lookupUser($this->getUsername(),$oldPassword);
+         # We want to look at the current user, and make sure it's OK
+         # before re-assigning the password
+         $userLookup = $this->lookupUser($this->getUsername(),$oldPassword);
+         # If this user checks out, now we can overwrite their old password
+         if ($userLookup["status"] === false)
+         {
+             # Bad user
+             throw(new Exception("Invalid original credentials"));
+         }
+         $currentUser = $userLookup["data"];
+         if(strlen($newPassword) < $this->getMinPasswordLength()) throw(new Exception("New password is too short. It should be at least " . $this->getMinPasswordLenght() . " characters"));
+         if(strlen($newPassword) > 8192) throw(new Exception("New password is too long. It should be less than 8192 characters"));
+         require_once(dirname(__FILE__).'/../core/stronghash/php-stronghash.php');
+         $hash=new Stronghash;
+         $hashedPw = $hash->hasher($newPassword);
+         $pwStore = json_encode($hasedPw);
+         # We don't need or want to recalculate a hardlink. The old
+         # salt isn't used anywhere where the old value is relevant.
+         $algo=$pw1['algo'];
+         $rounds=$pw1['rounds'];
+         # We need to update the "data" column with the $algo and
+         # $rounds data
+         $xml = new Xml;
+         $data = $currentUser["data"];
+         $backupData = $data;
+         $data = $xml->updateTag($data,"<rounds>",$this->sanitize($rounds));
+         $data = $xml->updateTag($data,"<algo>",$this->sanitize($algo));
+
+         /*
+          * We can't use writeToUser() since it requires user
+          * validation, and the second part of the update will always fail.
+          * So, we're going to manually construct the query here.
+          */
+         $query="UPDATE `".$this->getTable()."` SET `".$this->$pwcol."`=\"".$this->sanitize($pwStore)."\", `data`=\"".$data."\" WHERE `".$this->usercol."`='".$this->getUsername()."'";
+         $l=$this->openDB();
+         mysqli_query($l,'BEGIN');
+         $r=mysqli_query($l,$query);
+         $finish_query= $r ? 'COMMIT':'ROLLBACK';
+         $callback = array('status'=>$r,'action'=>$finish_query,"new_password"=>$newPassword);
+         if($finish_query == 'ROLLBACK')
+         {
+             $callback["error"] = mysqli_error($l);
+         }
+         $r2=mysqli_query($l,$finish_query);
+         $callback["status"] = $r && $r2;
+         return $callback;
+         
        }
      }
      catch(Exception $e)
