@@ -76,6 +76,8 @@ module.exports = (grunt) ->
         files:
           "js/c.js":"coffee/*.coffee"
     phplint:
+      options:
+        phpCmd: "C:\wamp\bin\php\php5.4.12\php.exe"
       scripts: ["handlers/login_functions.php","login.php"]
     watch:
       scripts:
