@@ -1338,12 +1338,39 @@ class UserFunctions extends DBHelper
      ***/
     try
     {
-      $this->openDB();
-
+      try
+      {
+        $userdata = $this->getUser();
+      }
+      catch(Exception $e)
+      {
+        return array("status"=>false,"human_error"=>"We couldn't verify the application. Please try again, or contact support","error"=>$e->getMessage(),"app_error_code"=>100);
+      }
+      $l = $this->openDB();
+      $query = "SELECT `" . $this->appKeyColumn . "` FROM `" . $this->getTable() . "` WHERE `" . $this->linkColumn . "`='" . $this->userlink . "'";
+      $r = mysqli_query($l,$query);
+      if($r === false)
+      {
+        return array("status"=>false,"human_error"=>"You haven't registered the application yet. Please sign in first.","error"=>mysqli_error($l),"app_error_code"=>104);
+      }
+      $row = mysqli_fetch_row($r);
+      $encryptedSecretsJson = $row[0];
+      $encryptedSecretsArray = json_decode($encryptedSecretsJson,true);
+      # Does this device exist?
+      if(!array_key_exists($verify_data["device"],$encryptedSecretsArray))
+      {
+        return array("status"=>false,"human_error"=>"This device isn't yet registered. Please log in with this device first","error"=>"Invalid device","app_error_code"=>105);
+      }
+      $secret = decryptThis($verify_data["appsecret_key"],$encryptedSecretsArray[$verify_data["device"]]);
+      # Now we can verify the provided auth token
+      $computedToken = sha1($verify_data["auth_prepend"] . $secret . $verify_data["auth_postpend"]);
+      $providedToken = $verify_data["authorization_token"];
+      return $computedToken === $providedToken;
+      
     }
     catch(Exception $e)
     {
-      return array('status'=>false,'error'=>"Unexpected exception: ".$e->getMessage());
+      return array('status'=>false,"human_error"=>"Server error. Please try again later.",'error'=>"Unexpected exception: ".$e->getMessage(),"app_error_code"=>-1);
     }
 
   }
