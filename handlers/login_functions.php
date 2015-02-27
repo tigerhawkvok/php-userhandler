@@ -105,16 +105,16 @@ class UserFunctions extends DBHelper
     $this->supportEmail = $service_email;
     $this->minPasswordLength = $minimum_password_length;
     $this->thresholdLength = $password_threshold_length;
-    $this->pwcol = $password_column;
-    $this->cookiecol = $cookie_ver_column;
-    $this->usercol = $user_column;
-    $this->linkcol = $link_column;
-    $this->tmpcol = $temporary_storage;
-    $this->totpcol = $totp_column;
-    $this->totpbackup = $totp_rescue;
-    $this->totpsteps = $totp_steps;
+    $this->pwColumn = $password_column;
+    $this->cookieColumn = $cookie_ver_column;
+    $this->userColumn = $user_column;
+    $this->linkColumn = $link_column;
+    $this->tmpColumn = $temporary_storage;
+    $this->totpColumn = $totp_column;
+    $this->totpBackup = $totp_rescue;
+    $this->totpSteps = $totp_steps;
     $this->needsAuth = $needs_manual_authentication;
-    $this->ipcol = $ip_record;
+    $this->ipColumn = $ip_record;
     $this->twilio_sid = $twilio_sid;
     $this->twilio_token = $twilio_token;
     $this->twilio_number = $twilio_number;
@@ -151,7 +151,7 @@ class UserFunctions extends DBHelper
         if(!empty($username))
           {
             # We're initiating a specified user
-            $key = empty($lookup_column) ? $this->usercol:$lookup_column;
+            $key = empty($lookup_column) ? $this->userColumn:$lookup_column;
             $this->getUser(array($key=>$username));
           }
         else $this->getUser();
@@ -203,16 +203,16 @@ class UserFunctions extends DBHelper
     $userdata = $this->getUser();
     if($is_test)
       {
-        return empty($userdata[$this->tmpcol]) ? false:$userdata[$this->tmpcol];
+        return empty($userdata[$this->tmpColumn]) ? false:$userdata[$this->tmpColumn];
       }
-    return empty($userdata[$this->totpcol]) ? false:$userdata[$this->totpcol];
+    return empty($userdata[$this->totpColumn]) ? false:$userdata[$this->totpColumn];
   }
 
   private function setTempSecret($secret)
   {
     $userdata = $this->getUser();
     $l = $this->openDB();
-    $query = "UPDATE `".$this->getTable()."` SET `".$this->tmpcol."`='$secret' WHERE `".$this->usercol."`='".$this->getUsername()."'";
+    $query = "UPDATE `".$this->getTable()."` SET `".$this->tmpColumn."`='$secret' WHERE `".$this->userColumn."`='".$this->getUsername()."'";
     $r = mysqli_query($l,$query);
     if ($r === false)
     {
@@ -224,7 +224,7 @@ class UserFunctions extends DBHelper
   public function has2FA()
   {
     $userdata = $this->getUser();
-    return !empty($userdata[$this->totpcol]);
+    return !empty($userdata[$this->totpColumn]);
   }
   public function getUser($user_id = null)
   {
@@ -255,8 +255,8 @@ class UserFunctions extends DBHelper
         throw(new Exception($error));
       }
 
-    if(@array_key_exists($this->usercol,$userdata)) $this->username = $userdata[$this->usercol];
-    if(@array_key_exists($this->linkcol,$userdata)) $this->userlink = $userdata[$this->linkcol];
+    if(@array_key_exists($this->userColumn,$userdata)) $this->username = $userdata[$this->userColumn];
+    if(@array_key_exists($this->linkColumn,$userdata)) $this->userlink = $userdata[$this->linkColumn];
     return $userdata;
   }
 
@@ -278,13 +278,13 @@ class UserFunctions extends DBHelper
     else if(!empty($user_id) && !is_array($user_id))
       {
         # Just a id with the default column
-        $col = $this->usercol;
+        $col = $this->userColumn;
       }
     else if(!empty($_COOKIE[$this->domain."_link"]))
       {
         # See if we can get this from the cookies
         $user_id=$_COOKIE[$this->domain."_link"];
-        $col = $this->linkcol;
+        $col = $this->linkColumn;
       }
 
     # Do we have an ID to work with?
@@ -480,9 +480,9 @@ class UserFunctions extends DBHelper
         $totp = new OTPHP\TOTP($secret);
         $totp->setDigest($this->getDigest());
         if($totp->verify($provided)) return true;
-        if(!is_numeric($this->totpsteps)) throw(new Exception("Bad TOTP step count"));
+        if(!is_numeric($this->totpSteps)) throw(new Exception("Bad TOTP step count"));
         $i = 1;
-        while($i <= $this->totpsteps)
+        while($i <= $this->totpSteps)
           {
             $test = array();
             $test[] = $totp->now();
@@ -531,7 +531,7 @@ class UserFunctions extends DBHelper
         ## The resulting provisioning URI should now be sent to the user
         ## Flag should be set server-side indicating the change id pending
         $l=$this->openDB();
-        $query = "UPDATE `".$this->getTable()."` SET `".$this->tmpcol."`='$secret' WHERE `".$this->usercol."`='".$this->username."'";
+        $query = "UPDATE `".$this->getTable()."` SET `".$this->tmpColumn."`='$secret' WHERE `".$this->userColumn."`='".$this->username."'";
         $r = mysqli_query($l,$query);
         if($r === false)
           {
@@ -600,14 +600,14 @@ class UserFunctions extends DBHelper
 
     if($this->verifyTOTP($code,true))
       {
-        # If it's good, make the secret "real" in the $this->totpcol
+        # If it's good, make the secret "real" in the $this->totpColumn
         $userdata = $this->getUser();
-        $secret = $userdata[$this->tmpcol];
-        $query = "UPDATE `".$this->getTable()."` SET `".$this->totpcol."`='$secret', `".$this->tmpcol."`=''  WHERE `".$this->usercol."`='".$this->username."'";
+        $secret = $userdata[$this->tmpColumn];
+        $query = "UPDATE `".$this->getTable()."` SET `".$this->totpColumn."`='$secret', `".$this->tmpColumn."`=''  WHERE `".$this->userColumn."`='".$this->username."'";
         require_once(dirname(__FILE__).'/../core/stronghash/php-stronghash.php');
         $backup = Stronghash::createSalt();
         $backup_store = hash("sha512",$backup);
-        $query2 = "UPDATE `".$this->getTable()."` SET `".$this->totpbackup."`='$backup_store' WHERE `".$this->usercol."`='".$this->username."'";
+        $query2 = "UPDATE `".$this->getTable()."` SET `".$this->totpBackup."`='$backup_store' WHERE `".$this->userColumn."`='".$this->username."'";
         $l = $this->openDB();
         mysqli_query($l,"BEGIN");
         $r = mysqli_query($l,$query);
@@ -666,8 +666,8 @@ class UserFunctions extends DBHelper
     # Check code for length, if it's long it's the backup
     if(strlen($code)>6)
       {
-        # Check against $this->totpbackup
-        $query = "SELECT `".$this->totpbackup."` FROM `".$this->getTable()."` WHERE `".$this->usercol."`='".$this->username."'";
+        # Check against $this->totpBackup
+        $query = "SELECT `".$this->totpBackup."` FROM `".$this->getTable()."` WHERE `".$this->userColumn."`='".$this->username."'";
         $r = mysqli_query($l,$query);
         if($r === false)
           {
@@ -689,7 +689,7 @@ class UserFunctions extends DBHelper
           }
       }
     # Unset backup and totpcol
-    $query = "UPDATE `".$this->getTable()."` SET `".$this->totpcol."`='', `".$this->tmpcol."`='', `".$this->totpbackup."`='' WHERE `".$this->usercol."`='".$this->getUsername()."'";
+    $query = "UPDATE `".$this->getTable()."` SET `".$this->totpColumn."`='', `".$this->tmpColumn."`='', `".$this->totpBackup."`='' WHERE `".$this->userColumn."`='".$this->getUsername()."'";
     mysqli_query($l,"BEGIN");
     $r = mysqli_query($l,$query);
     if($r === false)
@@ -842,11 +842,11 @@ class UserFunctions extends DBHelper
         return array("status"=>false,"error"=>"Your name must be less than 100 characters.");
       }
 
-    $result=$this->lookupItem($user,$this->usercol);
+    $result=$this->lookupItem($user,$this->userColumn);
     if($result!==false)
       {
         $data=mysqli_fetch_assoc($result);
-        if($data[$this->usercol]==$username) return array("status"=>false,"error"=>'Your email is already registered. Please try again. Did you forget your password?');
+        if($data[$this->userColumn]==$username) return array("status"=>false,"error"=>'Your email is already registered. Please try again. Did you forget your password?');
       }
     if(strlen($pw_in) < $this->getMinPasswordLength()) return array("status"=>false,"error"=>'Your password is too short. Please try again.');
     // Complexity checks here, if not relegated to JS ...
@@ -869,10 +869,10 @@ class UserFunctions extends DBHelper
         $fields[]=$key;
         switch($key)
           {
-          case $this->usercol:
+          case $this->userColumn:
             $store[]=$user;
             break;
-          case $this->pwcol:
+          case $this->pwColumn:
             $store[]=$pw_store;
             break;
           case "creation":
@@ -895,7 +895,7 @@ class UserFunctions extends DBHelper
           case "secdata":
             $store[]=$sdata_init;
             break;
-          case $this->linkcol:
+          case $this->linkColumn:
             $store[]=$hardlink;
             break;
           case "phone":
@@ -969,7 +969,7 @@ class UserFunctions extends DBHelper
       }
     # check it's a valid email! validation skipped.
     $xml=new Xml;
-    $result=$this->lookupItem($username,$this->usercol);
+    $result=$this->lookupItem($username,$this->userColumn);
     if($result!==false)
       {
         try
@@ -980,7 +980,7 @@ class UserFunctions extends DBHelper
                 # check password
                 require_once(dirname(__FILE__).'/../core/stronghash/php-stronghash.php');
                 $hash=new Stronghash;
-                $data=json_decode($userdata[$this->pwcol],true);
+                $data=json_decode($userdata[$this->pwColumn],true);
                 # Decrypt the password if totp_code is_numeric()
                 if(is_numeric($totp_code))
                   {
@@ -988,7 +988,7 @@ class UserFunctions extends DBHelper
                   }
                 if($hash->verifyHash($pw,$data))
                   {
-                    $this->getUser($userdata[$this->usercol]);
+                    $this->getUser($userdata[$this->userColumn]);
 
                     ## Does the user have 2-factor authentication?
                     if($this->has2FA())
@@ -998,7 +998,7 @@ class UserFunctions extends DBHelper
                           {
                             # The user has 2FA turned on, prompt it
                             $key = Stronghash::createSalt();
-                            $query = "UPDATE `".$this->getTable()."` SET `".$this->tmpcol."`='$key' WHERE `".$this->usercol."`='".$this->username."'";
+                            $query = "UPDATE `".$this->getTable()."` SET `".$this->tmpColumn."`='$key' WHERE `".$this->userColumn."`='".$this->username."'";
                             $r = mysqli_query($l,$query);
                             if($r === false) throw(new Exception("Unable to encrypt password"));
                             $encrypted_pw = urlencode(self::encryptThis($key,$pw));
@@ -1019,7 +1019,7 @@ class UserFunctions extends DBHelper
                             return array(false,"status"=>false,"totp"=>true,"error"=>"Invalid TOTP code","human_error"=>"Bad verification code. Please try again.");
                           }
                         # Remove the encryption key
-                        $query = "UPDATE `".$this->getTable()."` SET `".$this->tmpcol."`='' WHERE `".$this->usercol."`='".$this->username."'";
+                        $query = "UPDATE `".$this->getTable()."` SET `".$this->tmpColumn."`='' WHERE `".$this->userColumn."`='".$this->username."'";
                         mysqli_query($l,$query);
                         # Return decrypted userdata, if applicable
                         # The salt is the password key "salt"
@@ -1149,7 +1149,7 @@ class UserFunctions extends DBHelper
         $userid = null;
         $detail = true;
       }
-    if(strpos($userid,"@")===false && !empty($userid)) $userid = array($this->linkcol=>$userid);
+    if(strpos($userid,"@")===false && !empty($userid)) $userid = array($this->linkColumn=>$userid);
     try
       {
         $userdata = $this->getUser($userid);
@@ -1161,7 +1161,7 @@ class UserFunctions extends DBHelper
       }
     if(is_array($userdata))
       {
-        $pw_characters=json_decode($userdata[$this->pwcol],true);
+        $pw_characters=json_decode($userdata[$this->pwColumn],true);
         $salt=$pw_characters['salt'];
 
         if(empty($hash) || empty($secret))
@@ -1184,17 +1184,17 @@ class UserFunctions extends DBHelper
         $current_ip = $_SERVER['REMOTE_ADDR'];
 
         # Are they logging in from the same IP?
-        if($userdata[$this->ipcol] != $current_ip)
+        if($userdata[$this->ipColumn] != $current_ip)
           {
-            if($detail) return array("state"=>false,"status"=>false,"error"=>"Different IP address on login","uid"=>$userid,"salt"=>$salt,"calc_conf"=>$conf,"basis_conf"=>$hash,"have_secret"=>self::strbool(empty($secret)),"from_cookie"=>self::strbool($from_cookie),"stored_ip"=>$userdata[$this->ipcol],"current_ip"=>$current_ip);
+            if($detail) return array("state"=>false,"status"=>false,"error"=>"Different IP address on login","uid"=>$userid,"salt"=>$salt,"calc_conf"=>$conf,"basis_conf"=>$hash,"have_secret"=>self::strbool(empty($secret)),"from_cookie"=>self::strbool($from_cookie),"stored_ip"=>$userdata[$this->ipColumn],"current_ip"=>$current_ip);
             return false;
           }
 
-        $value_create=array($secret,$salt,$userdata[$this->cookiecol],$userdata[$this->ipcol],$this->getSiteKey());
+        $value_create=array($secret,$salt,$userdata[$this->cookieColumn],$userdata[$this->ipColumn],$this->getSiteKey());
 
         $conf=sha1(implode('',$value_create));
         $state= $conf==$hash ? true:false;
-        if($state) $this->getUser($userdata[$this->usercol]);
+        if($state) $this->getUser($userdata[$this->userColumn]);
         if($detail) return array('state'=>self::strbool($state),"status"=>true,"uid"=>$userid,"salt"=>$salt,"calc_conf"=>$conf,"basis_conf"=>$hash,"from_cookie"=>self::strbool($from_cookie),'got_user_pass_info'=>is_array($pw_characters),'got_userdata'=>is_array($userdata),'source'=>$value_create);
         return $state;
       }
@@ -1234,7 +1234,7 @@ class UserFunctions extends DBHelper
             $userdata=$r[1];
           }
         $id=$userdata['id'];
-        $dblink = $userdata[$this->linkcol];
+        $dblink = $userdata[$this->linkColumn];
 
         # Nom, cookies!
         $expire_days=7;
@@ -1243,12 +1243,12 @@ class UserFunctions extends DBHelper
         require_once(dirname(__FILE__).'/../core/stronghash/php-stronghash.php');
         $otsalt=Stronghash::createSalt();
         $cookie_secret=Stronghash::createSalt();
-        $pw_characters=json_decode($userdata[$this->pwcol],true);
+        $pw_characters=json_decode($userdata[$this->pwColumn],true);
         $salt=$pw_characters['salt'];
         $current_ip = empty($current_ip) ? $_SERVER['REMOTE_ADDR']:$remote;
 
         //store it
-        $query="UPDATE `".$this->getTable()."` SET `".$this->cookiecol."`='$otsalt', `".$this->ipcol."`='$current_ip' WHERE id='$id'";
+        $query="UPDATE `".$this->getTable()."` SET `".$this->cookieColumn."`='$otsalt', `".$this->ipColumn."`='$current_ip' WHERE id='$id'";
         $l=$this->openDB();
         mysqli_query($l,'BEGIN');
         $result=mysqli_query($l,$query);
@@ -1358,7 +1358,7 @@ class UserFunctions extends DBHelper
      * @param string $col the database column to be written to
      * @param array $validation_data data to verify access to the
      * user. An array of "password"=>$password or manually provided
-     * cookie data with $this->linkcol as the key. If this isn't
+     * cookie data with $this->linkColumn as the key. If this isn't
      * provided, cookies are used.
      * @param bool $replace whether to replace existing
      * data. Otherwise, it appends. Default: true.
@@ -1370,13 +1370,13 @@ class UserFunctions extends DBHelper
     $validated=false;
     if(is_array($validation_data))
       {
-        if(array_key_exists($this->linkcol,$validation_data))
+        if(array_key_exists($this->linkColumn,$validation_data))
           {
             // confirm with validateUser();
-            $validated=$this->validateUser($validation_data[$this->linkcol],$validation_data['hash'],$validation_data['secret']);
+            $validated=$this->validateUser($validation_data[$this->linkColumn],$validation_data['hash'],$validation_data['secret']);
             $method='Confirmation token';
-            $where_col=$this->linkcol;
-            $user=$validation_data[$this->linkcol];
+            $where_col=$this->linkColumn;
+            $user=$validation_data[$this->linkColumn];
           }
         else if(array_key_exists('password',$validation_data))
           {
@@ -1402,7 +1402,7 @@ class UserFunctions extends DBHelper
     if($validated)
       {
         $userdata = $this->getUser();
-        $where_col = $this->linkcol;
+        $where_col = $this->linkColumn;
         $user = $userdata[$where_col];
         if(empty($user)) return array("status"=>false,"error"=>"Problem assigning user");
         // write it to the db
@@ -1532,10 +1532,10 @@ class UserFunctions extends DBHelper
        * substr(hash('md5',salt.$rand_string),0,8) and the key
        *
        * We encrypt the $rand_string with $key and stash it in
-       * $this->tmpcol .
+       * $this->tmpColumn .
        *
        * When it comes time to verify the reset, we decrypt
-       * $this->tmpcol and compare the first 8 characters of the md5.
+       * $this->tmpColumn and compare the first 8 characters of the md5.
        *
        * Note that the use of md5 was mostly for speed an
        * convenience. While a stronger hash would be less prone to
@@ -1545,7 +1545,7 @@ class UserFunctions extends DBHelper
       require_once(dirname(__FILE__).'/../core/stronghash/php-stronghash.php');
       $rand_string = Stronghash::createSalt();
       $key = Stronghash::createSalt(8);
-      $pw_data = json_decode($userdata[$this->pwcol],true);
+      $pw_data = json_decode($userdata[$this->pwColumn],true);
       $salt = $pw_data["salt"];
       $user_verify_token = substr(hash('md5',$salt.$rand_string),0,8);
       $encrypted_secret = self::encryptThis($key,$rand_string);
@@ -1671,7 +1671,7 @@ class UserFunctions extends DBHelper
          $verify = $oldPassword["verify"];
          if(empty($key) or empty($verify)) throw(new Exception("Not all required credentials were provided"));
          # Now, we verify the supplied credentials
-         $pw_data = json_decode($userdata[$this->pwcol],true);
+         $pw_data = json_decode($userdata[$this->pwColumn],true);
          $salt = $pw_data["salt"];
          # Pull the secret from the temp column
          $secret = $this->getSecret(true);
@@ -1706,7 +1706,7 @@ class UserFunctions extends DBHelper
           * validation, which we don't have by definition, so we're
           * going to manually construct the query here.
           */
-         $query="UPDATE `".$this->getTable()."` SET `".$this->$pwcol."`=\"".$this->sanitize($pw_store)."\", `data`=\"".$data."\" WHERE `".$this->usercol."`='".$this->getUsername()."'";
+         $query="UPDATE `".$this->getTable()."` SET `".$this->$pwcol."`=\"".$this->sanitize($pw_store)."\", `data`=\"".$data."\" WHERE `".$this->userColumn."`='".$this->getUsername()."'";
          $l=$this->openDB();
          mysqli_query($l,'BEGIN');
          $r=mysqli_query($l,$query);
@@ -1755,7 +1755,7 @@ class UserFunctions extends DBHelper
           * validation, and the second part of the update will always fail.
           * So, we're going to manually construct the query here.
           */
-         $query="UPDATE `".$this->getTable()."` SET `".$this->$pwcol."`=\"".$this->sanitize($pwStore)."\", `data`=\"".$data."\" WHERE `".$this->usercol."`='".$this->getUsername()."'";
+         $query="UPDATE `".$this->getTable()."` SET `".$this->$pwcol."`=\"".$this->sanitize($pwStore)."\", `data`=\"".$data."\" WHERE `".$this->userColumn."`='".$this->getUsername()."'";
          $l=$this->openDB();
          mysqli_query($l,'BEGIN');
          $r=mysqli_query($l,$query);
@@ -1795,7 +1795,7 @@ class UserFunctions extends DBHelper
       {
         require_once(dirname(__FILE__).'/../core/stronghash/php-stronghash.php');
         $key = Stronghash::createSalt();
-        $query = "UPDATE `".$this->getTable()."` SET `".$this->tmpcol."`='$key' WHERE `".$this->usercol."`='".$this->getUsername()."'";
+        $query = "UPDATE `".$this->getTable()."` SET `".$this->tmpColumn."`='$key' WHERE `".$this->userColumn."`='".$this->getUsername()."'";
         $r = mysqli_query($l,$query);
         if($r === false) throw(new Exception("Unable to encrypt password"));
         # Play nice with lookupUser
@@ -1842,7 +1842,7 @@ class UserFunctions extends DBHelper
     $auth_code = $secret_key ^ $userString;
     $auth_result = sha1($auth_code);
     $return['auth'] = $auth_result;
-    $return['user'] = $target_userdata[$this->linkcol];
+    $return['user'] = $target_userdata[$this->linkColumn];
     $return['target_user'] = $target_user;
     $return['status'] = true;
     return $return;
@@ -1863,8 +1863,8 @@ class UserFunctions extends DBHelper
      * @return array
      ***/
     # Look at the 'flag' item
-    $target_user = $this->getUser(array($this->usercol=>$user_email));
-    $components = $this->getAuthTokens($target_user[$this->linkcol]);
+    $target_user = $this->getUser(array($this->userColumn=>$user_email));
+    $components = $this->getAuthTokens($target_user[$this->linkColumn]);
     # Pull in the configuration files
     include(dirname(__FILE__)."/../CONFIG.php");
     $url = empty($login_url) ? "login.php":$login_url;
@@ -1877,7 +1877,7 @@ class UserFunctions extends DBHelper
     $success = false;
     # Loop through all the admins ....
     $l = $this->openDB();
-    $query = "SELECT `".$this->usercol."`, `".$this->linkcol."` FROM ".$this->getTable()." WHERE `admin_flag`=TRUE";
+    $query = "SELECT `".$this->userColumn."`, `".$this->linkColumn."` FROM ".$this->getTable()." WHERE `admin_flag`=TRUE";
     $r = mysqli_query($l,$query);
     $i = 0;
     $j = 0;
@@ -1923,7 +1923,7 @@ class UserFunctions extends DBHelper
       {
         $errors = array("message"=>"No valid destinations","rows"=>mysqli_num_rows($r));
       }
-    return array("status"=>$success,"mailer"=>array("emails_sent"=>$i,"attempts_made"=>$j,"errors"=>$errors,"destinations"=>$destinations,"last_error"=>$lasterror),"config_meta"=>array("ref_config"=>dirname(__FILE__)."/../CONFIG.php","working_dir"=>$working_subdirectory,"url"=>$url),"user"=>array("user_email"=>$user_email,"target_user"=>$target_user[$this->linkcol],"user_set_params"=>array($this->usercol=>$user_email)),"components"=>$components);
+    return array("status"=>$success,"mailer"=>array("emails_sent"=>$i,"attempts_made"=>$j,"errors"=>$errors,"destinations"=>$destinations,"last_error"=>$lasterror),"config_meta"=>array("ref_config"=>dirname(__FILE__)."/../CONFIG.php","working_dir"=>$working_subdirectory,"url"=>$url),"user"=>array("user_email"=>$user_email,"target_user"=>$target_user[$this->linkColumn],"user_set_params"=>array($this->userColumn=>$user_email)),"components"=>$components);
 
   }
 
@@ -1953,8 +1953,8 @@ class UserFunctions extends DBHelper
       {
         return array("status"=>false,"error"=>$e->getMessage(),"message"=>"Please log in before attempting to authenticate a user.","cookie"=>$this->domain."_link","value"=>$_COOKIE[$this->domain."_link"]);
       }
-    $thisUserEmail = $thisUserdata[$this->usercol];
-    $target_user = array($this->linkcol => $target_user);
+    $thisUserEmail = $thisUserdata[$this->userColumn];
+    $target_user = array($this->linkColumn => $target_user);
     try
       {
         $userdata = $this->getUser($target_user);
@@ -1971,7 +1971,7 @@ class UserFunctions extends DBHelper
         return $ret;
       }
     $working_key = base64_decode(urldecode($encoded_key));
-    $key = self::decryptThis($thisUserdata[$this->linkcol],$working_key);
+    $key = self::decryptThis($thisUserdata[$this->linkColumn],$working_key);
     $components = $this->getAuthTokens($target_user,$key);
     $primary_token = $components['auth'];
     if ($primary_token != $token)
@@ -1981,13 +1981,13 @@ class UserFunctions extends DBHelper
         $ret['provided_token'] = $token;
         /* $ret['encoded_key'] = urldecode($encoded_key); */
         /* $ret['key_to_decrypt'] = $working_key; */
-        /* $ret['decryption_user'] = $userdata[$this->linkcol]; */
+        /* $ret['decryption_user'] = $userdata[$this->linkColumn]; */
         /* $ret['decrypted_key'] = $key; */
         $ret['components'] = $components;
         return $ret;
       }
     $l = $this->openDB();
-    $query = "UPDATE `".$this->getTable()."` SET `flag`=TRUE WHERE `".$this->linkcol."`='".$target_user."'";
+    $query = "UPDATE `".$this->getTable()."` SET `flag`=TRUE WHERE `".$this->linkColumn."`='".$target_user."'";
     $r = mysqli_query($l,$query);
     if($r === false)
       {
@@ -2002,14 +2002,14 @@ class UserFunctions extends DBHelper
     $mail->Subject = "Authorization granted to ".$this->getDomain();
     $mail->Body = "<p>Your access to ".$this->getDomain()." as been enabled. <a href='".$this->getQualifiedDomain()."'>Click here to visit the site</a>.";
     $userMail = $mail;
-    $userMail->addAddress($userdata[$this->usercol]);
+    $userMail->addAddress($userdata[$this->userColumn]);
     $userMail->send();
     # Send out an email to admins saying that they've been authorized.
-    $query = "SELECT `".$this->usercol."` FROM ".$this->getTable()." WHERE `admin_flag`=TRUE";
+    $query = "SELECT `".$this->userColumn."` FROM ".$this->getTable()." WHERE `admin_flag`=TRUE";
     $r = mysqli_query($l,$query);
     $mail = $this->getMailObject();
     $mail->Subject = "[".$this->getDomain()."] New User Authenticated";
-    $mail->Body = "<p>".$userdata[$this->usercol]." was granted access to ".$this->getDomain()." by ".$thisUserEmail.".</p><p>No further action is required, and you can disregard emails asking to grant this user access.</p><p><strong>If you believe this to be in error, immediately take steps to take your site offline</strong></p>";
+    $mail->Body = "<p>".$userdata[$this->userColumn]." was granted access to ".$this->getDomain()." by ".$thisUserEmail.".</p><p>No further action is required, and you can disregard emails asking to grant this user access.</p><p><strong>If you believe this to be in error, immediately take steps to take your site offline</strong></p>";
     while ($row=mysqli_fetch_row($r))
       {
         $to = $row[0];
@@ -2091,7 +2091,7 @@ class UserFunctions extends DBHelper
       {
         # Check it
         $l = $this->openDB();
-        $query = "SELECT `".$this->tmpcol."` FROM `".$this->getTable()."` WHERE `".$this->usercol."`='".$this->getUsername()."'";
+        $query = "SELECT `".$this->tmpColumn."` FROM `".$this->getTable()."` WHERE `".$this->userColumn."`='".$this->getUsername()."'";
         $r = mysqli_query($l,$query);
         if($r === false)
           {
@@ -2102,7 +2102,7 @@ class UserFunctions extends DBHelper
         if($db_code == $auth_code)
           {
             # Set verified to true, and empty the special
-            $query = "UPDATE `".$this->getTable()."` SET `".$this->tmpcol."`='', `phone_verified`=true WHERE `".$this->usercol."`='".$this->getUsername()."'";
+            $query = "UPDATE `".$this->getTable()."` SET `".$this->tmpColumn."`='', `phone_verified`=true WHERE `".$this->userColumn."`='".$this->getUsername()."'";
             mysqli_query($l,"BEGIN");
             $r = mysqli_query($l,$query);
             if($r === false)
@@ -2134,7 +2134,7 @@ class UserFunctions extends DBHelper
     require_once(dirname(__FILE__).'/../core/stronghash/php-stronghash.php');
     $auth = Stronghash::createSalt(8);
     # Write auth to tmpcol
-    $query = "UPDATE `".$this->getTable()."` SET `".$this->tmpcol."`='$auth' WHERE `".$this->usercol."`='".$this->getUsername()."'";
+    $query = "UPDATE `".$this->getTable()."` SET `".$this->tmpColumn."`='$auth' WHERE `".$this->userColumn."`='".$this->getUsername()."'";
     $l = $this->openDB();
     $r = mysqli_query($l,$query);
     if($r === false)
@@ -2177,10 +2177,10 @@ class UserFunctions extends DBHelper
      * @return string|bool decrypted string or false
      ***/
     $this->getUser();
-    if(!empty($this->usercol))
+    if(!empty($this->userColumn))
       {
         $l = $this->openDB();
-        $query = "SELECT `".$this->tmpcol."` FROM `".$this->getTable()."` WHERE `".$this->usercol."`='".$this->username."'";
+        $query = "SELECT `".$this->tmpColumn."` FROM `".$this->getTable()."` WHERE `".$this->userColumn."`='".$this->username."'";
         $r = mysqli_query($l,$query);
         if($r === false)
           {
