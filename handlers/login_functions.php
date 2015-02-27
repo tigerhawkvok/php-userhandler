@@ -119,6 +119,7 @@ class UserFunctions extends DBHelper
     $this->twilio_token = $twilio_token;
     $this->twilio_number = $twilio_number;
     $this->site = $site_name;
+    $this->appKeyColumn = $app_column;
 
     $proto = 'http';
     if (isset($_SERVER["HTTPS"]) && $_SERVER["HTTPS"] == "on") {$proto .= "s";}
@@ -1323,6 +1324,30 @@ class UserFunctions extends DBHelper
   }
 
 
+  private function registerApp()
+  {
+    return array("status"=>false);
+  }
+
+  public function verifyApp($verify_data)
+  {
+    /***
+     * Verify an application
+     *
+     * @param array $verify_data
+     ***/
+    try
+    {
+      $this->openDB();
+
+    }
+    catch(Exception $e)
+    {
+      return array('status'=>false,'error'=>"Unexpected exception: ".$e->getMessage());
+    }
+
+  }
+
   public function writeToUser($data,$col,$validation_data=null,$replace=true,$alert_forbidden_column = true)
   {
 
@@ -1362,6 +1387,11 @@ class UserFunctions extends DBHelper
             if($validated) $this->getUser(array("username"=>$validation_data['username']));
             $method='Password';
           }
+        else if(array_key_exists("application_verification",$validation_data))
+        {
+          # The user is accessing through an app. Check the
+          # verification chain.
+        }
         else return array('status'=>false,"error"=>"Bad validation data");
       }
     else
@@ -1738,7 +1768,7 @@ class UserFunctions extends DBHelper
          $r2=mysqli_query($l,$finish_query);
          $callback["status"] = $r && $r2;
          return $callback;
-         
+
        }
      }
      catch(Exception $e)

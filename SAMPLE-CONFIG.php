@@ -105,6 +105,7 @@ $db_cols=array(
   "defaults"=>"text",
   "public_key"=>"text",
   "private_key"=>"text",
+  "app_key"=>"varchar(255)",
   "secret"=>"varchar(255)",
   "emergency_code"=>"varchar(255)",
   "phone"=>"varchar(20)",
@@ -122,6 +123,9 @@ $cookie_ver_column = "auth_key";
 
 $totp_column = "secret";
 $totp_rescue = "emergency_code";
+
+$app_column = "app_key";
+
 # See https://github.com/tigerhawkvok/php-userhandler/blob/master/totp/doc/Use.md#digest-algorithm
 # Leave as sha1 for compatibility with Google Authenticator
 $totp_digest = "sha1";
