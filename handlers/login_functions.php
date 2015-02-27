@@ -1335,11 +1335,17 @@ class UserFunctions extends DBHelper
      * Verify an application
      *
      * @param array $verify_data
+     * @return bool
      ***/
     try
     {
       try
       {
+        # Verify the struture of $verify_data
+        if(!(isset($verify_data["device"]) && isset($verify_data["authorization_token"]) && isset($verify_data["auth_prepend"]) && isset($verify_data["appsecret_key"]) && isset(verify_data["dblink"])))
+        {
+          return array("status"=>false,"human_error"=>"The application and server could not communicate. Please contact support.","error"=>"Invalid verification data structure","app_error_code"=>107);
+        }
         $userdata = $this->getUser();
       }
       catch(Exception $e)
@@ -1361,7 +1367,7 @@ class UserFunctions extends DBHelper
       {
         return array("status"=>false,"human_error"=>"This device isn't yet registered. Please log in with this device first","error"=>"Invalid device","app_error_code"=>105);
       }
-      $secret = decryptThis($verify_data["appsecret_key"],$encryptedSecretsArray[$verify_data["device"]]);
+      $secret = self::decryptThis($verify_data["appsecret_key"],$encryptedSecretsArray[$verify_data["device"]]);
       # Now we can verify the provided auth token
       $computedToken = sha1($verify_data["auth_prepend"] . $secret . $verify_data["auth_postpend"]);
       $providedToken = $verify_data["authorization_token"];
