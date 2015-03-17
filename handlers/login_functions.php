@@ -1371,7 +1371,14 @@ class UserFunctions extends DBHelper
       # Now we can verify the provided auth token
       $computedToken = sha1($verify_data["auth_prepend"] . $secret . $verify_data["auth_postpend"]);
       $providedToken = $verify_data["authorization_token"];
-      return $computedToken === $providedToken;
+      if ($computedToken === $providedToken)
+      {
+          return array("status"=>true);
+      }
+      else
+      {
+        return array("status"=>false,"human_error"=>"Invalid credentials. Please log out and log back in.","error"=>"Invalid credentials","app_error_code"=>106);
+      }
       
     }
     catch(Exception $e)
@@ -1493,6 +1500,36 @@ class UserFunctions extends DBHelper
       }
     else return array('status'=>false,'error'=>'Bad validation','method'=>$method,"validated_meta"=>$vmeta);
   }
+    
+    public static function createRandomUserPassword($newPasswordLength = 16)
+    {
+        /***
+         *
+         ***/
+        $sourcePasswordLength = 2 * $newPasswordLength;
+        require_once(dirname(__FILE__).'/../core/stronghash/php-stronghash.php');
+        $passwordBase = Stronghash::createSalt($sourcePasswordLength);
+        $ambiguousCharacters = array(
+            "l",
+            "1",
+            "I",
+            "O",
+            "0",
+            "Q",
+            "D",
+            "B",
+            "8",
+            "G",
+            "6",
+            "S",
+            "5",
+            "Z",
+            "2"            
+        );
+        $passwordNiceBase = str_replace($ambiguousCharacters,"",$passwordBase);
+        $passwordNice = substr($passwordNiceBase,0,$newPasswordLength);
+        return $passwordNice;
+    }
 
   public function resetUserPassword($method = null, $totp = null)
   {
@@ -1577,7 +1614,7 @@ class UserFunctions extends DBHelper
        */
       require_once(dirname(__FILE__).'/../core/stronghash/php-stronghash.php');
       $rand_string = Stronghash::createSalt();
-      $key = Stronghash::createSalt(8);
+      $key = this::createRandomUserPassword(8);
       $pw_data = json_decode($userdata[$this->pwColumn],true);
       $salt = $pw_data["salt"];
       $user_verify_token = substr(hash('md5',$salt.$rand_string),0,8);
@@ -1719,7 +1756,7 @@ class UserFunctions extends DBHelper
          # The token matches -- let's make them a new password and
          # provide it.
          require_once(dirname(__FILE__).'/../core/stronghash/php-stronghash.php');
-         $newPassword = Stronghash::createSalt(16);
+         $newPassword = self::createRandomUserPassword();
          $hash=new Stronghash;
          $pw1=$hash->hasher($newPassword);
          $pw_store=json_encode($pw1);
@@ -2164,8 +2201,7 @@ class UserFunctions extends DBHelper
      *
      * @return array with the twilio object in key "twilio"
      ***/
-    require_once(dirname(__FILE__).'/../core/stronghash/php-stronghash.php');
-    $auth = Stronghash::createSalt(8);
+    $auth = this::createRandomUserPassword(8);
     # Write auth to tmpcol
     $query = "UPDATE `".$this->getTable()."` SET `".$this->tmpColumn."`='$auth' WHERE `".$this->userColumn."`='".$this->getUsername()."'";
     $l = $this->openDB();
