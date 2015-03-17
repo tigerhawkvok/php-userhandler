@@ -1384,7 +1384,7 @@ class UserFunctions extends DBHelper
       try
       {
         # Verify the struture of $verify_data
-        if(!(isset($verify_data["device"]) && isset($verify_data["authorization_token"]) && isset($verify_data["auth_prepend"]) && isset($verify_data["appsecret_key"]) && isset(verify_data["dblink"])))
+        if(!(isset($verify_data["device"]) && isset($verify_data["authorization_token"]) && isset($verify_data["auth_prepend"]) && isset($verify_data["appsecret_key"]) && isset($verify_data["dblink"])))
         {
           return array("status"=>false,"human_error"=>"The application and server could not communicate. Please contact support.","error"=>"Invalid verification data structure","app_error_code"=>107);
         }
