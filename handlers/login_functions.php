@@ -958,8 +958,9 @@ class UserFunctions extends DBHelper
      * usercol of this object
      * @param string $pw the plaintext password of the user
      * @param bool $return whether to return user data, or just the
-     * boolean lookup state
-     * @param bool $totp_code
+     *                      boolean lookup state
+     * @param bool|int $totp_code - false if none is needed/given,
+     *                              otherwise the code
      * @param bool $override
      ***/
 
@@ -1032,7 +1033,7 @@ class UserFunctions extends DBHelper
                         else
                           {
                               $returning=array(true,$userdata,"status"=>true,"data"=>$userdata);
-                            return $returning;
+                              return $returning;
                           }
                       }
 
@@ -1050,7 +1051,7 @@ class UserFunctions extends DBHelper
                         else
                           {
                               $returning=array(true,$userdata,"status"=>true,"data"=>$userdata);
-                            return $returning;
+                              return $returning;
                           }
                       }
                     else
@@ -1230,7 +1231,7 @@ class UserFunctions extends DBHelper
         else
           {
             $r = $this->lookupUser($username,$password_or_is_data);
-            if($r[0]===false) return array(false,'status'=>false,'error'=>"Bad user credentials","username"=>$username);
+            if($r["status"]===false) return array(false,'status'=>false,'error'=>"Bad user credentials","username"=>$username);
             $userdata=$r[1];
           }
         $id=$userdata['id'];
@@ -1312,6 +1313,7 @@ class UserFunctions extends DBHelper
           'source'=>$value_create,
           'ip_given'=>$remote,
           'raw_auth'=>$value,
+          'raw_secret'=>$cookie_secret,
           'raw_cookie'=>$raw_data,
           'basis'=>$value_create,
           'expires'=>"{expires:$expire_days,path:'/'}"
@@ -1324,9 +1326,49 @@ class UserFunctions extends DBHelper
   }
 
 
-  private function registerApp()
+  public function registerApp($validation_data, $encryption_key, $device, $phone_verify_code = null)
   {
-    return array("status"=>false);
+    $status = $this->validateUser($validation_data["dblink"],$validation_data["hash"],$validation_data["secret"]);
+    if (!$status)
+    {
+      return array("status"=>$status,"error"=>"Invalid validation credentials","human_error"=>"There was a problem validating this application","app_error_code"=>110);
+    }
+    # Application verification requires SMS
+    $phoneStatus = $this->verifyPhone();
+    if ($phoneStatus["status"] === false && $phoneStatus["is_good"] === true)
+    {
+      # The phone is good and the user is good, do the device mapping
+      $l = $this->openDB();
+      $query = "SELECT `" . $this->appKeyColumn . "` FROM `" . $this->getTable() . "` WHERE `" . $this->linkColumn . "`='" . $this->userlink . "'";
+      $r = mysqli_query($l,$query);
+      # We want the current entries
+      $row = mysqli_fetch_row($r);
+      $encryptedSecretsJson = $row[0];
+      $encryptedSecretsArray = json_decode($encryptedSecretsJson,true);
+      # Even if this device is already registered, we want to
+      # overwrite the association
+      require_once(dirname(__FILE__).'/../core/stronghash/php-stronghash.php');
+      # Create a secret
+      $server_secret = Stronghash::createSalt();
+      # Encrypt it with $encryption_key ...
+      $data = self::encryptThis($encryption_key,$server_secret);
+      $encryptedSecretsArray[$device] = $data;
+      $encryptedSecretsJson = json_encode($encryptedSecretsArray);
+      # ... and save it
+      $status = $this->writeToUser($encryptedSecretsJson,$this->appKeyColumn,$validation_data);
+      if ($status["status"] !== true)
+      {
+        $status["app_error_code"] = 112;
+        $status["human_error"] = "Could not register app to server";
+        return $status;
+      }
+      $status["secret"] = $server_secret;
+      return $status;
+    }
+    else
+    {
+      return array("status"=>false,"human_error"=>"Please validate your phone number to continue","error"=>"Phone validation needed","app_error_code"=>111);
+    }
   }
 
   public function verifyApp($verify_data)
@@ -1335,7 +1377,7 @@ class UserFunctions extends DBHelper
      * Verify an application
      *
      * @param array $verify_data
-     * @return bool
+     * @return array
      ***/
     try
     {
@@ -1357,10 +1399,19 @@ class UserFunctions extends DBHelper
       $r = mysqli_query($l,$query);
       if($r === false)
       {
-        return array("status"=>false,"human_error"=>"You haven't registered the application yet. Please sign in first.","error"=>mysqli_error($l),"app_error_code"=>104);
+        # The query failed
+        return array("status"=>false,"human_error"=>"You haven't registered the application yet. Please sign in first.","error"=>mysqli_error($l),"app_error_code"=>-1);
+      }
+      if (mysqli_num_rows($r) == 0)
+      {
+        return array("status"=>false,"human_error"=>"You haven't registered the application yet. Please sign in first.","error"=>"No valid rows","app_error_code"=>104);
       }
       $row = mysqli_fetch_row($r);
       $encryptedSecretsJson = $row[0];
+      if (empty($encryptedSecretsJson))
+      {
+        return array("status"=>false,"human_error"=>"You haven't registered the application yet. Please sign in first.","error"=>"No content in verification column","app_error_code"=>104);
+      }
       $encryptedSecretsArray = json_decode($encryptedSecretsJson,true);
       # Does this device exist?
       if(!array_key_exists($verify_data["device"],$encryptedSecretsArray))
@@ -1373,13 +1424,13 @@ class UserFunctions extends DBHelper
       $providedToken = $verify_data["authorization_token"];
       if ($computedToken === $providedToken)
       {
-          return array("status"=>true);
+        return array("status"=>true,"data"=>$userdata);
       }
       else
       {
         return array("status"=>false,"human_error"=>"Invalid credentials. Please log out and log back in.","error"=>"Invalid credentials","app_error_code"=>106);
       }
-      
+
     }
     catch(Exception $e)
     {
@@ -1402,6 +1453,7 @@ class UserFunctions extends DBHelper
      * provided, cookies are used.
      * @param bool $replace whether to replace existing
      * data. Otherwise, it appends. Default: true.
+     * @return
      ***/
 
     $vmeta = false;
@@ -1431,6 +1483,11 @@ class UserFunctions extends DBHelper
         {
           # The user is accessing through an app. Check the
           # verification chain.
+          $status = verifyApp($validation_data["application_verification"]);
+          if ($status["status"] !== true)
+          {
+          return array("status"=>false,"error"=>"Bad application verification","human_error"=>"There was a problem verifying the application","app_error_code"=>106);
+          }
         }
         else return array('status'=>false,"error"=>"Bad validation data");
       }
@@ -1500,7 +1557,7 @@ class UserFunctions extends DBHelper
       }
     else return array('status'=>false,'error'=>'Bad validation','method'=>$method,"validated_meta"=>$vmeta);
   }
-    
+
     public static function createRandomUserPassword($newPasswordLength = 16)
     {
         /***
@@ -1524,7 +1581,7 @@ class UserFunctions extends DBHelper
             "S",
             "5",
             "Z",
-            "2"            
+            "2"
         );
         $passwordNiceBase = str_replace($ambiguousCharacters,"",$passwordBase);
         $passwordNice = substr($passwordNiceBase,0,$newPasswordLength);

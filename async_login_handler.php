@@ -128,7 +128,6 @@ function generateTOTPForm($get)
   $r = $u->makeTOTP($domain);
 
   # Whether or not it fails, return $r
-
   return $r;
 }
 
