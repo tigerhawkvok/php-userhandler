@@ -22,7 +22,7 @@ class UserFunctions extends DBHelper
      *                         (string)"url" (defaults to "localhost")
      *                         and (array)"cols" of type "column_name"=>"type".
      ***/
-    global $user_data_storage,$profile_picture_storage,$site_security_token,$service_email,$minimum_password_length,$password_threshold_length,$db_cols,$default_user_table,$default_user_database,$password_column,$cookie_ver_column,$user_column,$totp_column,$totp_steps,$temporary_storage,$needs_manual_authentication,$totp_rescue,$ip_record,$default_user_database,$default_sql_user,$default_sql_password,$sql_url,$default_user_table,$baseurl,$twilio_sid,$twilio_token,$twilio_number,$site_name,$link_column;
+    global $user_data_storage,$profile_picture_storage,$site_security_token,$service_email,$minimum_password_length,$password_threshold_length,$db_cols,$default_user_table,$default_user_database,$password_column,$cookie_ver_column,$user_column,$totp_column,$totp_steps,$temporary_storage,$needs_manual_authentication,$totp_rescue,$ip_record,$default_user_database,$default_sql_user,$default_sql_password,$sql_url,$default_user_table,$baseurl,$twilio_sid,$twilio_token,$twilio_number,$site_name,$link_column,$app_column;
     # Set up the parameters in CONFIG.php
     $config_path = dirname(__FILE__).'/../CONFIG.php';
     require_once($config_path);
@@ -1196,7 +1196,7 @@ class UserFunctions extends DBHelper
         $conf=sha1(implode('',$value_create));
         $state= $conf==$hash ? true:false;
         if($state) $this->getUser($userdata[$this->userColumn]);
-        if($detail) return array('state'=>self::strbool($state),"status"=>true,"uid"=>$userid,"salt"=>$salt,"calc_conf"=>$conf,"basis_conf"=>$hash,"from_cookie"=>self::strbool($from_cookie),'got_user_pass_info'=>is_array($pw_characters),'got_userdata'=>is_array($userdata),'source'=>$value_create);
+        if($detail) return array('state'=>self::strbool($state),"status"=>self::strbool($state),"uid"=>$userid,"salt"=>$salt,"calc_conf"=>$conf,"basis_conf"=>$hash,"from_cookie"=>self::strbool($from_cookie),'got_user_pass_info'=>is_array($pw_characters),'got_userdata'=>is_array($userdata),'source'=>$value_create);
         return $state;
       }
     else
@@ -1328,19 +1328,29 @@ class UserFunctions extends DBHelper
 
   public function registerApp($validation_data, $encryption_key, $device, $phone_verify_code = null)
   {
-    $status = $this->validateUser($validation_data["dblink"],$validation_data["hash"],$validation_data["secret"]);
-    if (!$status)
+    $status = $this->validateUser($validation_data["dblink"],$validation_data["hash"],$validation_data["secret"],true);
+    if (!$status["status"])
     {
-      return array("status"=>$status,"error"=>"Invalid validation credentials","human_error"=>"There was a problem validating this application","app_error_code"=>110);
+      if($status["error"] == "Invalid userid lookup") 
+      {
+        $human_error = "Please create your user first";
+        $status["error"] = "New user flag missing";
+      }
+      else $human_error = "There was a problem validating this application";
+      return array_merge(array("status"=>$status["status"],"error"=>"Invalid validation credentials","human_error"=>$human_error,"app_error_code"=>110),$status);
     }
     # Application verification requires SMS
-    $phoneStatus = $this->verifyPhone();
+    $phoneStatus = $this->verifyPhone($phone_verify_code);
     if ($phoneStatus["status"] === false && $phoneStatus["is_good"] === true)
     {
       # The phone is good and the user is good, do the device mapping
       $l = $this->openDB();
       $query = "SELECT `" . $this->appKeyColumn . "` FROM `" . $this->getTable() . "` WHERE `" . $this->linkColumn . "`='" . $this->userlink . "'";
       $r = mysqli_query($l,$query);
+      if ($r === false)
+      {
+        return array("status"=>false,"error"=>mysqli_error($l),"human_error"=>"The database couldn't read the device list","query"=>$query,"app_error_code"=>113);
+      }
       # We want the current entries
       $row = mysqli_fetch_row($r);
       $encryptedSecretsJson = $row[0];
@@ -1360,6 +1370,7 @@ class UserFunctions extends DBHelper
       {
         $status["app_error_code"] = 112;
         $status["human_error"] = "Could not register app to server";
+        $status["validation_data_provided"] = $validation_data;
         return $status;
       }
       $status["secret"] = $server_secret;
@@ -1367,7 +1378,7 @@ class UserFunctions extends DBHelper
     }
     else
     {
-      return array("status"=>false,"human_error"=>"Please validate your phone number to continue","error"=>"Phone validation needed","app_error_code"=>111);
+      return array("status"=>false,"human_error"=>"Please validate your phone number to continue","error"=>"Phone validation needed","app_error_code"=>111,"twilio"=>$phoneStatus);
     }
   }
 
@@ -1555,7 +1566,7 @@ class UserFunctions extends DBHelper
         $r2=mysqli_query($l,$finish_query);
         return array('status'=>$r,'data'=>$data,'col'=>$col,'action'=>$finish_query,'result'=>$r2,'method'=>$method,"error"=>$error);
       }
-    else return array('status'=>false,'error'=>'Bad validation','method'=>$method,"validated_meta"=>$vmeta);
+    else return array('status'=>false,'error'=>'Bad validation','method'=>$method,"validated_meta"=>$vmeta,"validated_details_token"=>$this->validateUser($validation_data[$this->linkColumn],$validation_data['hash'],$validation_data['secret'],true));
   }
 
     public static function createRandomUserPassword($newPasswordLength = 16)
@@ -1671,7 +1682,7 @@ class UserFunctions extends DBHelper
        */
       require_once(dirname(__FILE__).'/../core/stronghash/php-stronghash.php');
       $rand_string = Stronghash::createSalt();
-      $key = this::createRandomUserPassword(8);
+      $key = self::createRandomUserPassword(8);
       $pw_data = json_decode($userdata[$this->pwColumn],true);
       $salt = $pw_data["salt"];
       $user_verify_token = substr(hash('md5',$salt.$rand_string),0,8);
@@ -2258,7 +2269,7 @@ class UserFunctions extends DBHelper
      *
      * @return array with the twilio object in key "twilio"
      ***/
-    $auth = this::createRandomUserPassword(8);
+    $auth = self::createRandomUserPassword(8);
     # Write auth to tmpcol
     $query = "UPDATE `".$this->getTable()."` SET `".$this->tmpColumn."`='$auth' WHERE `".$this->userColumn."`='".$this->getUsername()."'";
     $l = $this->openDB();
