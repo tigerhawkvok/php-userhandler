@@ -1566,7 +1566,7 @@ class UserFunctions extends DBHelper
         $r2=mysqli_query($l,$finish_query);
         return array('status'=>$r,'data'=>$data,'col'=>$col,'action'=>$finish_query,'result'=>$r2,'method'=>$method,"error"=>$error);
       }
-    else return array('status'=>false,'error'=>'Bad validation','method'=>$method,"validated_meta"=>$vmeta,"validated_details_token"=>$this->validateUser($validation_data[$this->linkColumn],$validation_data['hash'],$validation_data['secret'],true));
+    else return array('status'=>false,'error'=>'Bad validation','method'=>$method,"validated_meta"=>$vmeta); #,"validated_details_token"=>$this->validateUser($validation_data[$this->linkColumn],$validation_data['hash'],$validation_data['secret'],true));
   }
 
     public static function createRandomUserPassword($newPasswordLength = 16)
