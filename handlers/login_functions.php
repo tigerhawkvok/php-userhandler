@@ -2278,7 +2278,7 @@ class UserFunctions extends DBHelper
       {
         throw(new Exception("Could not prepare authorization code - ".mysqli_error($l)));
       }
-    $auth_string = "Thanks for verifying! Enter the following into your current page:\n$auth";
+    $auth_string = "Thanks for verifying! Enter the following into the verification field:\n$auth";
     # Text it to the user; set the strict flag to false
     $obj = $this->textUser($auth_string,false);
     return array("status"=>true,"message"=>"Check your phone for your authorization code.","twilio"=>$obj);
