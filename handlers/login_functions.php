@@ -1249,7 +1249,7 @@ class UserFunctions extends DBHelper
         $current_ip = empty($current_ip) ? $_SERVER['REMOTE_ADDR']:$remote;
 
         //store it
-        $query="UPDATE `".$this->getTable()."` SET `".$this->cookieColumn."`='$otsalt', `".$this->ipColumn."`='$current_ip' WHERE id='$id'";
+        $query="UPDATE `".$this->getTable()."` SET `".$this->cookieColumn."`='$otsalt', `".$this->ipColumn."`='$current_ip', `last_login`='".microtime_float()."' WHERE id='$id'";
         $l=$this->openDB();
         mysqli_query($l,'BEGIN');
         $result=mysqli_query($l,$query);
