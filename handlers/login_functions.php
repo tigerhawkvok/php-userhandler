@@ -780,6 +780,8 @@ class UserFunctions extends DBHelper
                     # Could not write to the storage path
                     throw(new Exception("Could not write to '$full_path'"));
                   }
+                # Try to ensure it's writeable
+                @chmod($full_path,0777);
               }
             $filename = $full_path.$file.".png";
           }
