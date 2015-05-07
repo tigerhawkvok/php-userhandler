@@ -219,3 +219,5 @@ CONFIG.php
 
 # Emacs autorecover
 \#*\#
+braintree_key_config.php
+stripe_key_config.php

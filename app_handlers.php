@@ -289,6 +289,7 @@ function authorizeApp($authenticationInformation)
   }
   # Call the $action
   $action_data["user_data"] = $r["data"];
+  $action_data["post_data"] = $_REQUEST;
   if ($action == "authorize")
   {
     // do nothing??
@@ -299,7 +300,14 @@ function authorizeApp($authenticationInformation)
     $action_result = $action_function_map[$action]($action_data);   
   }
   $action_result["elapsed"] = elapsed();
-  $action_result["details"] = @array_merge($action_result["details"],array("requested_action"=>$action));
+  if(!empty($action_result["details"]))
+  {
+    $action_result["details"] = @array_merge($action_result["details"],array("requested_action"=>$action));
+  }
+  else
+  {
+    $action_result["details"] = array("requested_action"=>$action);
+  }
   returnAjax($action_result);
 }
 
