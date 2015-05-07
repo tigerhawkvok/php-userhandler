@@ -23,8 +23,6 @@
         "phpunit/phpunit": "4.5.*"
     },
     "autoload": {
-        "psr-0": {
-            "Services_Twilio": ""
-        }
+        "files": ["Services/Twilio.php"]
     }
 }

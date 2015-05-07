@@ -1,6 +1,59 @@
 twilio-php Changelog
 ====================
 
+Version 4.1.0
+-------------
+
+Released May 7, 2015
+
+- Add support for Twilio Monitor Events and Alerts
+
+Version 4.0.4
+-------------
+
+Released May 6, 2015
+
+- Add support for the new Pricing API.
+
+Version 4.0.3
+-------------
+
+Released on April 29, 2015
+
+- Fix to add rawurlencoding to phone number lookups to support spaces
+
+Version 4.0.2
+-------------
+
+Released on April 27, 2015
+
+- Fix the autoloading so that Lookups_Services_Twilio and
+  TaskRouter_Services_Twilio are available independently of Services_Twilio
+
+Version 4.0.1
+-------------
+
+Released on April 22, 2015
+
+- Make Lookups_Services_Twilio and TaskRouter_Services_Twilio available through
+  Composer.
+
+Version 4.0.0
+-------------
+
+Released on April 16, 2015
+
+- Removes counts from ListResource
+- Change Services_Twilio::getRequestUri() from a static method to an instance
+  method.
+
+Version 3.13.1
+--------------
+
+Released on March 31, 2015
+
+- Add new Lookups API client
+
 Version 3.13.0
 --------------
 
