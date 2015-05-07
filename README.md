@@ -9,6 +9,14 @@ This is a repo meant to deal with the vast majority of handling cases for user w
 - One-Time Passwords
 - Etc
 
+## Instructions
+
+1. Move `api.php` to target API directory
+2. Edit `api.php` as needed to fix paths
+2. Edit `SAMPLE_CONFIG.php` to suit your configuration, and re-save as `CONFIG.php`.
+
+Then you're set!
+
 ## Libraries
 
 Libraries that may need minor tweaking to "play nice" have been included as subtrees, and those that should be used verbatim have been included as submodules.

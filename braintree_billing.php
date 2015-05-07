@@ -3,12 +3,15 @@
 require_once("./braintree/lib/Braintree.php");
 require_once("./userhandler/core/core.php");
 
-// Braintree_Configuration::environment('production'); 
-// Braintree_Configuration::merchantId("bbp4hcpsj6wdf48d");
-// Braintree_Configuration::publicKey("j78w4w338r66zqfj");
-// require_once("./braintree_key_config.php");
-// Braintree_Configuration::privateKey($braintree_private_key);
+## Uncomment the following lines to move to produciton
+# Braintree_Configuration::environment('production'); 
+# Braintree_Configuration::merchantId("MERCHANT_ID");
+# Braintree_Configuration::publicKey("MERCHANT_PUBLIC_KEY");
+# require_once("./braintree_key_config.php");
+# Braintree_Configuration::privateKey($braintree_private_key);
 
+
+# Sample sandbox server. Change to suit your own configuration.
 Braintree_Configuration::environment('sandbox');
 Braintree_Configuration::merchantId('zrvcsvtqmsmmrbc8');
 Braintree_Configuration::publicKey('mbbcq4cdn7nzfbzz');
