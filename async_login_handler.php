@@ -328,4 +328,33 @@ function getFromUser($get) {
   return array('status'=>false,'error'=>"One or more required fields were left blank");
 }
 
+function getProfileImage($profile) {
+    $u = new UserFunctions();
+    return array("status"=>true,"img"=>$u->getUserPicture($profile));
+}
+
+function setNewProfileImage($get) {
+    $conf=$get['hash'];
+    $s=$get['secret'];
+    $id=$get['dblink'];
+    if(!empty($conf) && !empty($s) && !empty($id))
+    {
+        $u=new UserFunctions();
+        if($u->validateUser($id,$conf,$s))
+        {
+            $result =  $u->setUserPicture($get);
+            if (!is_array($result)) $result = array("status"=>false,"error"=>"Invalid server response setting image","human_error"=>"There was a server error setting your image","app_error_code"=>121);
+            return $result;
+        }
+        else return array('status'=>false,'error'=>'Invalid user', "human_error"=>"The app could not authorize you to the server","app_error_code"=>106);
+    }
+    $emptyState = array(
+        "hash"   => $conf,
+        "secret" => $s,
+        "userid" => $id,
+        "provided"=>$get
+    );
+return array('status'=>false,'error'=>"One or more required fields were left blank","human_error"=>"There was a problem communicating with the server","app_error_code"=>107,"details"=>$emptyState);
+}
+
 ?>

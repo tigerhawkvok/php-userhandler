@@ -237,6 +237,7 @@ class UserFunctions extends DBHelper
 
     if(empty($this->user) || !empty($user_id)) $this->setUser($user_id);
     $userdata = $this->user;
+    $userdata["img"] = $this->getUserPicture();
     if(!array($userdata))
       {
         if(empty($userdata))
@@ -1087,6 +1088,7 @@ class UserFunctions extends DBHelper
                           }
                         else
                           {
+                              $userdata['img'] = $this->getUserPicture();
                               $returning=array(true,$userdata,"status"=>true,"data"=>$userdata);
                             return $returning;
                           }
@@ -1109,19 +1111,73 @@ class UserFunctions extends DBHelper
   }
 
 
-  public function getUserPicture($id,$path=null,$extra_types_array=null)
+  public function getUserPicture($id = null, $path = null, $extra_types_array = null)
   {
-    if(empty($path)) $path=$this->picture_path;
+      if(empty($id)) $id = $this->userlink;
+      if(empty($path)) $path = $this->picture_path;
     else $path.= substr($path,-1)=='/' ? '':'/';
+      //$path = $this->qualDomain . $path;
     $valid_ext=array('jpg','jpeg','png','bmp','gif','svg');
     if(is_array($extra_types_array)) $valid_ext = array_merge($extra_types_array);
     foreach($valid_ext as $ext)
       {
         $file=$id.".".$ext;
-        if(file_exists($path.$file)) return $path.$file;
+        if(file_exists($path.$file)) return $this->qualDomain . $path . $file;
       }
-    return $path."default.jpg";
+    return $this->qualDomain . $path . "default.png";
   }
+
+    public function setUserPicture($image, $path = null ) {
+        if(empty($path)) $path = $this->picture_path;
+        if(is_array($image))
+        {
+            # Parse the chunked base 64 image that was sent as a POST
+            $imgArray = $image;
+            $imgComposite = array();
+            $extension = $imgArray["extension"];
+            if(empty($extension)) $extension = "jpg";
+            foreach($imgArray as $k=>$v)
+            {
+                if(preg_match('/i[0-9]+/',$k))
+                {
+                    $k = str_replace("i","",$k);
+                    $imgComposite[$k] = html_entity_decode($v);
+                }
+            }
+            if(!empty($imgComposite))
+            {
+                ksort($imgComposite);
+                $image = implode("",$imgComposite);
+            }
+            else return array("status"=>false, "error"=>"Could not parse POST","human_error"=>"There was an error uploading your image","app_error_code"=>118);
+            $imgUri = $path . $this->userlink . "." . $extension;
+            $imgSmallUri = $path . $this->userlink . "-sm." . $extension;
+            $imgTinyUri = $path . $this->userlink . "-xs." . $extension;
+            try
+            {
+            file_put_contents($imgUri,base64_decode($image));
+            }
+            catch (Exception $e)
+            {
+                return array("status"=>false,"error"=>$e->getMessage(),"human_error"=>"There was an error in processing your image","app_error_code"=>119,"path"=>$path,"img_path"=>$imgUri);
+            }
+            try
+            {
+            # Shrinkify image
+            require_once(dirname(__FILE__)."/image_functions.php");
+            @resizeImage($imgUri,$imgSmallUri,512,512);
+            @resizeImage($imgUri,$imgTinyUri,128,128);
+            return array("status"=>true, "image_uri"=>$imgUri, "small_image_uri"=>$imgSmallUri, "tiny_image_uri"=>$imgTinyUri);
+            }
+            catch (Exception $e)
+            {
+                return array("status"=>true,"image_uri"=>$imgUri,"error"=>$e->getMessage(),"human_error"=>"There was an error in shrinking your image","app_error_code"=>122,"path"=>$path);
+            }
+        }
+        # It's not of POST-form
+        return array("status"=>false,"error"=>"Unsupported image upload method","app_error_code"=>120,"human_error"=>"The upload method you tried is not yet supported. Please try an alternate method.");
+    }
+
 
   public function validateUser($userid=null,$hash=null,$secret=null,$detail=false)
   {
@@ -1197,7 +1253,7 @@ class UserFunctions extends DBHelper
         $conf=sha1(implode('',$value_create));
         $state= $conf==$hash ? true:false;
         $error = null;
-        if($state) 
+        if($state)
         {
             $this->getUser($userdata[$this->userColumn]);
         }
@@ -1341,13 +1397,13 @@ class UserFunctions extends DBHelper
     $status["status"] = boolstr($status["status"]);
     if ($status["status"] != true)
     {
-      if($status["error"] == "Invalid userid lookup") 
+      if($status["error"] == "Invalid userid lookup")
       {
         $human_error = "Please create your user first";
         $status["error"] = "New user flag missing";
       }
       else $human_error = "There was a problem validating your credentials. Please try again.";
-      return array_merge(array("status"=>$status["status"],"error"=>"Invalid validation credentials","human_error"=>$human_error,"app_error_code"=>110,"original_error"=>$status["error"]),$status);
+      return array_merge(array("status"=>$status["status"],"error"=>"Invalid validation credentials","human_error"=>$human_error,"app_error_code"=>110,"original_error"=>$status["error"],"details"=>$status),$status);
     }
     $validationStatus = $status;
     # Application verification requires SMS
@@ -1378,7 +1434,7 @@ class UserFunctions extends DBHelper
       # ... and save it
       if (empty($validation_data["application_verification"]))
       {
-        $validation_data["application_verification"] = "none_provided"; 
+        $validation_data["application_verification"] = "none_provided";
       }
       $status = $this->writeToUser($encryptedSecretsJson,$this->appKeyColumn,$validation_data);
       if ($status["status"] !== true)
@@ -1453,14 +1509,14 @@ class UserFunctions extends DBHelper
       $encryptedSecretsJson = html_entity_decode($encryptedSecretsJson);
       $encryptedSecretsArray = json_decode($encryptedSecretsJson,true);
       # Does this device exist?
-      if(!array_key_exists($verify_data["device"],$encryptedSecretsArray))
+      if(!array_key_exists($verify_data["device"], $encryptedSecretsArray))
       {
           $validDevices = array();
           foreach($encryptedSecretsArray as $device=>$secret)
           {
-              $validDevces[] = $device;
+              $validDevices[] = $device;
           }
-          return array("status"=>false,"human_error"=>"This device isn't yet registered. Please log in with this device first","error"=>"Invalid device","app_error_code"=>105, "details"=>array("device"=>$verify_data["device"],"valid_devices"=>$validDevices,"raw_json"=>$encryptedSecretsJson));
+          return array("status"=>false,"human_error"=>"This device isn't yet registered. Please log in with this device first","error"=>"Invalid device","app_error_code"=>105, "details"=>array("device"=>$verify_data["device"],"valid_devices"=>$validDevices,"raw_json"=>$encryptedSecretsJson, "raw_encrypted"=>$encryptedSecretsArray));
       }
       $secret = self::decryptThis($verify_data["appsecret_key"],$encryptedSecretsArray[$verify_data["device"]]);
       # Now we can verify the provided auth token
@@ -1468,7 +1524,7 @@ class UserFunctions extends DBHelper
       $providedToken = $verify_data["authorization_token"];
       if ($computedToken === $providedToken)
       {
-        return array("status"=>true,"data"=>$userdata);
+          return array("status"=>true,"data"=>$userdata,"userid"=>$this->userlink,"validation_tokens"=>$this->createCookieTokens());
       }
       else
       {
@@ -1731,7 +1787,8 @@ class UserFunctions extends DBHelper
         # Reset by email
         include(dirname(__FILE__)."/../CONFIG.php");
         $url = empty($login_url) ? "login.php":$login_url;
-        $rel_dir = str_replace($relative_path,$working_subdirectory,"") . "/";
+        $rel_dir = $working_subdirectory;
+        if(substr($rel_dir,-1) != "/") $rel_dir = $rel_dir . "/";
         $email_link = $this->getQualifiedDomain() . $rel_dir . $url ."?key=".urlencode($user_tokens["key"])."&verify=".urlencode($user_tokens["verify"]);
         $mail = $this->getMailObject();
         $mail->Subject = $this->getDomain() . " Account Reset";
@@ -2040,7 +2097,8 @@ class UserFunctions extends DBHelper
     # Pull in the configuration files
     include(dirname(__FILE__)."/../CONFIG.php");
     $url = empty($login_url) ? "login.php":$login_url;
-    $rel_dir = str_replace($relative_path,$working_subdirectory,"") . "/";
+    $rel_dir = $working_subdirectory;
+    if(substr($rel_dir,-1) != "/") $rel_dir = $rel_dir . "/";
     $link = $this->getQualifiedDomain() . $rel_dir . $url ."?confirm=true&token=".$components['auth']."&user=".$components['user']."&key=";
     # get all the administrative users, and encrypt the key with their
     # user DB link

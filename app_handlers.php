@@ -135,8 +135,10 @@ function registerApp($appInformation)
     }
     else if ($result["status"] === false) 
     {
-      $result["human_error"] = $result["message"];
-      $result["app_error_code"] = 110;
+        $errorCode = strtolower($result["desc"]) == "no numeric id" ? 117 : 110;
+        $message = $errorCode == 117 ? "Invalid credentials, or missing new user flag. Set new_user=true" : $result["message"];
+      $result["human_error"] = $message;
+      $result["app_error_code"] = $errorCode;
       $result["details"]["requested_action"] = $action;
       return $result;
     }
@@ -224,7 +226,7 @@ function authorizeApp($authenticationInformation)
     $action_data = smart_decode64($authenticationInformation["data"]);
     if(!is_array($action_data))
     {
-      returnAjax(array("status"=>false,"human_error"=>"The application and server could not communicate. Please contact support.","error"=>"Invalid data object","app_error_code"=>101,"details"=>array("requested_action"=>$action)));
+        returnAjax(array("status"=>false,"human_error"=>"The application and server could not communicate. Please contact support.","error"=>"Invalid data object","app_error_code"=>101,"details"=>array("requested_action"=>$action,"provided_data"=>$authenticationInformation["data"],"decoded_data"=>$action_data,"json_data"=>base64_decode($authenticationInformation["data"]))));
     }
     else
     {
@@ -266,7 +268,9 @@ function authorizeApp($authenticationInformation)
     "read"=>"getFromUser",
     "sync"=>"syncUserData",
     "authorize"=>"getLoginState",
-    "bill" => "billUser"
+    "bill" => "billUser",
+    "newProfileImage" => "setNewProfileImage",
+    "getProfileImage" => "getProfileImage"
   );
   if(!array_key_exists($action,$action_function_map))
   {
@@ -285,9 +289,15 @@ function authorizeApp($authenticationInformation)
   $r = $u->verifyApp($app_verify);
   if(!$r["status"])
   {
-    returnAjax(array("status"=>false,"human_error"=>"This app isn't authorized. Please log out and log back in.","error"=>"Invalid app credentials","app_error_code"=>106,"details"=>array("requested_action"=>$action,"original_response"=>$r)));
+      $errorCode = !empty($r["app_error_code"]) ? $r["app_error_code"] : 106;
+      $humanError = !empty($r["human_error"]) ? $r["human_error"] : "This app isn't authorized. Please log out and log back in.";
+      $error = !empty($r["error"]) ? $r["error"] : "Invalid app credentials";
+    returnAjax(array("status"=>false,"human_error"=>$humanError,"error"=>$error,"app_error_code"=>$errorCode,"details"=>array("requested_action"=>$action,"original_response"=>$r)));
   }
   # Call the $action
+  $action_data["hash"] = $r["validation_tokens"]["raw_auth"];
+  $action_data["secret"] = $r["validation_tokens"]["raw_secret"];
+  $action_data["dblink"] = $r["userid"];
   $action_data["user_data"] = $r["data"];
   $action_data["post_data"] = $_REQUEST;
   if ($action == "authorize")
