@@ -10,7 +10,7 @@ function returnAjax($data)
   header('Cache-Control: no-cache, must-revalidate');
   header('Expires: Mon, 26 Jul 1997 05:00:00 GMT');
   header('Content-type: application/json');
-  print json_encode($data); //,JSON_FORCE_OBJECT); // PHP 5.3+ - http://www.php.net/json_encode
+  print @json_encode($data,JSON_FORCE_OBJECT);
   exit();
 }
 
@@ -27,6 +27,34 @@ switch($do)
     break;
   case 'get':
     returnAjax(getFromUser($_REQUEST));
+    break;
+  case "maketotp":
+    returnAjax(generateTOTPForm($_REQUEST));
+    break;
+  case "verifytotp":
+    returnAjax(verifyTOTP($_REQUEST));
+    break;
+  case "savetotp":
+    returnAjax(saveTOTP($_REQUEST));
+    break;
+  case "removetotp":
+    returnAjax(removeTOTP($_REQUEST));
+    break;
+  case "sendtotptext":
+    returnAjax(sendTOTPText($_REQUEST));
+    break;
+  case "totpstatus":
+    returnAjax(hasTOTP($_REQUEST));
+    break;
+  case "cansms":
+    returnAjax(canSMS($_REQUEST));
+    break;
+  case "verifyphone":
+    returnAjax(verifyPhone($_REQUEST));
+    break;
+  case "removeaccount":
+    returnAjax(removeAccount($_REQUEST));
+    break;
   default:
     returnAjax(getLoginState($_REQUEST),true);
   }
@@ -40,6 +68,185 @@ function getLoginState($get,$default=false)
   return array("status"=>$u->validateUser($id,$conf,$s),'defaulted'=>$default);
 }
 
+function hasTOTP($get)
+{
+  $user = $get["user"];
+  $u = new UserFunctions($user);
+  try
+    {
+      return $u->has2FA();
+    }
+  catch(Exception $e)
+    {
+      return false;
+    }
+}
+
+function canSMS($get)
+{
+  $user = $get["user"];
+  $u = new UserFunctions($user);
+  try
+    {
+      # This should be non-strict
+      return $u->canSMS(false);
+    }
+  catch(Exception $e)
+    {
+      return false;
+    }
+}
+
+function generateTOTPForm($get)
+{
+  $user = $get['user'];
+  $password = $get['password'];
+  $u = new UserFunctions($user);
+  $r = $u->lookupUser($user,$password);
+  if($r[0] === false)
+    {
+      $r["status"] = false;
+      return $r;
+    }
+  # User is valid
+
+  # Get a provider
+  $baseurl = 'http';
+  if ($_SERVER["HTTPS"] == "on") {$baseurl .= "s";}
+  $baseurl .= "://www.";
+  $baseurl.=$_SERVER['HTTP_HOST'];
+  $base=array_slice(explode(".",$baseurl),-2);
+  $domain=$base[0];
+
+  $r = $u->makeTOTP($domain);
+
+  # Whether or not it fails, return $r
+
+  return $r;
+}
+
+function saveTOTP($get)
+{
+  $user = $get['user'];
+  $secret = $get['secret'];
+  $hash = $get['hash'];
+  $code = $get['code'];
+  $u = new UserFunctions($user);
+  $r = $u->validateUser($user,$hash,$secret);
+  if ($r === false)
+    {
+      return array("status"=>false,"error"=>"Couldn't validate cookie information","human_error"=>"Application error");
+    }
+
+  return $u->saveTOTP($code);
+}
+
+
+function verifyTOTP($get)
+{
+  $code = $get['code'];
+  $user = $get['user'];
+  $password = urldecode($get['password']);
+  $password = str_replace(' ','+',$password);
+  $secret = $get['secret'];
+  $hash = $get['hash'];
+  $remote = $get['remote'];
+  $is_encrypted = boolstr($get['encrypted']);
+  # If it's a good code, pass the cookies back
+  $u = new UserFunctions($user);
+
+  /* print_r("bob"."\n\n");
+  $e=$u->encryptThis("sally","bob");
+  print_r($e."\n\n");
+  print_r($u->decryptThis("sally",$e)."\n\n");*/
+
+  $r = $u->lookupUser($user,$password,false,$code);
+
+  if($r[0] === false)
+    {
+      $r["status"] = false;
+      $r["human_error"] = $r["message"];
+      return $r;
+    }
+  ## The user and code is valid!
+  $return = array("status"=>true);
+  $userdata = $r[1];
+  $cookie_result = $u->createCookieTokens(null,true,$remote);
+  $return["cookies"] = $cookie_result;
+  $return["string"] = json_encode($cookie_result["raw_cookie"]);
+  return $return;
+}
+
+function removeTOTP($get)
+{
+  /***
+   * Remove the TOTP code
+   ***/
+  $u = new UserFunctions();
+  return $u->removeTOTP($get['username'],$get['password'],$get['code']);
+}
+
+function removeAccount($get)
+{
+  # The password pushed in will need to be encrypted as if from login
+  $baseurl = 'http';
+  if ($_SERVER["HTTPS"] == "on") {$baseurl .= "s";}
+  $baseurl .= "://www.";
+  $baseurl.=$_SERVER['HTTP_HOST'];
+  $base_long = str_replace("http://","",strtolower($baseurl));
+  $base_long = str_replace("https://","",strtolower($base_long));
+  $base_arr = explode("/",$base_long);
+  $base = $base_arr[0];
+  $url_parts = explode(".",$base);
+  $tld = array_pop($url_parts);
+  $domain = array_pop($url_parts);
+  $u = new UserFunctions($_COOKIE[$domain."_user"]);
+  return $u->removeThisAccount($get['username'],$get['password'],$get['code']);
+}
+
+function sendTOTPText($get)
+{
+  $user = $get['user'];
+  # We don't need to verify the user here
+  $u = new UserFunctions($user);
+  # Ensure the user has SMS-ability and 2FA
+  try
+    {
+      # Return status
+      if(!$u->has2FA())
+        {
+          return array("status"=>false,"human_error"=>"Two-Factor authentication is not enabled for this account","error"=>"Two-Factor authentication is not enabled for this account","username"=>$user);
+        }
+      if(!$u->canSMS())
+        {
+          return array("status"=>false,"human_error"=>"Your phone setup isn't complete","error"=>"User failed SMS check","username"=>$user);
+        }
+      $result = $u->sendTOTPText();
+      return array("status"=>$result,"message"=>"Message sent");
+    }
+  catch (Exception $e)
+    {
+      return array("status"=>false,"human_error"=>"There was a problem sending your text.","error"=>$e->getMessage());
+    }
+}
+
+function verifyPhone($get)
+{
+  /***
+   * Verify a phone number.
+   * An empty or bad verification code generates a new one to be saved in the temp column
+   ***/
+  $u = new UserFunctions($get['username']);
+  try
+    {
+      return $u->verifyPhone($get['auth']);
+    }
+  catch(Exception $e)
+    {
+      return array("status"=>false,"error"=>$e->getMessage(),"human_error"=>"Failed to send verification text.");
+    }
+}
+
 
 function saveToUser($get)
 {
@@ -50,7 +257,7 @@ function saveToUser($get)
   $conf=$get['hash'];
   $s=$get['secret'];
   $id=$get['dblink'];
-  $replace = boolstr($get['replace']); 
+  $replace = boolstr($get['replace']);
   /***
    * These fields can only be written to from directly inside of a script, rather than an AJAX call.
    ***/
@@ -62,7 +269,9 @@ function saveToUser($get)
     'private_key',
     'public_key',
     'creation',
-    'dblink'
+    'dblink',
+    'secret',
+    'emergency_code'
   );
   if(!empty($conf) && !empty($s) && !empty($id) && !empty($get['data']) && !empty($get['col']))
     {
@@ -76,7 +285,7 @@ function saveToUser($get)
           $col=decode64($get['col']);
           if(empty($data) || empty($col)) return array('status'=>false,'error'=>'Invalid data format (required valid base64 data)');
           // User safety
-          if(in_array($col,$protected_fields,true)) return array('status'=>false,'error'=>'Cannot write to $col : protected field'); 
+          if(in_array($col,$protected_fields,true)) return array('status'=>false,'error'=>'Cannot write to $col : protected field');
           return $u->writeToUser($data,$col,$val);
         }
       else return array('status'=>false,'error'=>'Invalid user');
@@ -101,7 +310,7 @@ function getFromUser($get) {
           $query="SELECT $col FROM `$default_user_table` WHERE dblink='$id'";
           $r=mysqli_query($l,$query);
           $row=mysqli_fetch_row($r);
-          return array('status'=>true,'data'=>deescape($row[0]));
+          return array('status'=>true,'data'=>deescape($row[0]),"col"=>$col,"id"=>$id);
         }
       else return array('status'=>false,'error'=>'Invalid user');
     }

@@ -6,7 +6,7 @@
 require_once(dirname(__FILE__).'/../CONFIG.php');
 require_once(dirname(__FILE__).'/functions.inc');
 
-function testDefaults() {
+function testDefaults($verbose=false) {
   global $default_user_table,$default_user_database;
   try
     {
@@ -15,16 +15,21 @@ function testDefaults() {
         {
           if(mysqli_query($l,"SELECT * FROM `$default_user_table` LIMIT 1")===false)
             {
+              if($verbose) echo "<!-- TESTDB DEFAULTS  (from $default_user_database):: SELECT * FROM `$default_user_table` LIMIT 1 // CREATING ... -->";
               if(createTable()) return true;
-              else die("Table $default_user_table does not exist and could not be created");
+              else return "Table $default_user_table does not exist and could not be created";
             }
-          else return true;
+          else
+            {
+              if($verbose) echo "<!-- TESTDB DEFAULTS (from $default_user_database) :: SELECT * FROM `$default_user_table` LIMIT 1 -->";
+              return true;
+            }
         }
-      else die("Unable to connect to database");
+      else return "Unable to connect to database";
     }
   catch(Exception $e)
     {
-      die("An unexpected error occured -- the system reported '$e'");
+      return "An unexpected error occured -- the system reported '$e'";
     }
 }
 

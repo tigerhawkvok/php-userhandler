@@ -106,9 +106,9 @@ entropy_to_crack_time = (entropy) -> .5 * Math.pow(2, entropy) * SECONDS_PER_GUE
 
 crack_time_to_score = (seconds) ->
   return 0 if seconds < Math.pow(10, 2)
-  return 1 if seconds < Math.pow(10, 4)
-  return 2 if seconds < Math.pow(10, 6)
-  return 3 if seconds < Math.pow(10, 8)
+  return 1 if seconds < Math.pow(10, 5)
+  return 2 if seconds < Math.pow(10, 8)
+  return 3 if seconds < Math.pow(10, 10)
   return 4
 
 # ------------------------------------------------------------------------------
