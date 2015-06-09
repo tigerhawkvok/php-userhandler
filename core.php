@@ -2,8 +2,12 @@
 
 if(!class_exists("DBHelper"))
   {
-    require_once(dirname(__FILE__)."/db/DBHelper.php"); 
+    require_once(dirname(__FILE__)."/db/DBHelper.php");
   }
+if(!class_exists("Stronghash"))
+{
+    require_once(dirname(__FILE__)."/stronghash/php-stronghash.php");
+}
 if(!class_exists("Xml"))
   {
     require_once(dirname(__FILE__)."/xml/xml.php");
@@ -33,14 +37,14 @@ if(!function_exists('microtime_float'))
 
 if(!function_exists('dirListPHP'))
   {
-    function dirListPHP ($directory,$filter=null,$extension=false,$debug=false) 
+    function dirListPHP ($directory,$filter=null,$extension=false,$debug=false)
     {
       $results = array();
       $handler = @opendir($directory);
       if($handler===false) return false;
-      while ($file = readdir($handler)) 
+      while ($file = readdir($handler))
         {
-          if ($file != '.' && $file != '..' )  
+          if ($file != '.' && $file != '..' )
             {
               if($filter!=null)
                 {
@@ -51,19 +55,19 @@ if(!function_exists('dirListPHP'))
                       $ext_file=array_pop($parts);
                       $filename=implode(".",$parts);
                       if($debug) echo "Looking at extension '$extension' and '$ext_file' for $file and $filename\n";
-                      if($ext_file==$extension) 
+                      if($ext_file==$extension)
                         {
                           if(empty($filter)) $results[]=$file;
                           else if(strpos(strtolower($filename),strtolower($filter))!==false) $results[]=$file;
                         }
                     }
-                  else if(strpos(strtolower($file),strtolower($filter))!==false) 
+                  else if(strpos(strtolower($file),strtolower($filter))!==false)
                     {
                       $results[]=$file;
                       if($debug) echo "No extension used\n";
                     }
                 }
-              else 
+              else
                 {
                   $results[] = $file;
                   if($debug) echo "No filter used \n";
@@ -77,10 +81,10 @@ if(!function_exists('dirListPHP'))
 
 if(!function_exists('array_find'))
   {
-    function array_find($needle, $haystack, $search_keys = false, $strict = false) 
+    function array_find($needle, $haystack, $search_keys = false, $strict = false)
     {
       if(!is_array($haystack)) return false;
-      foreach($haystack as $key=>$value) 
+      foreach($haystack as $key=>$value)
         {
           $what = ($search_keys) ? $key : $value;
           if($strict)
@@ -95,7 +99,7 @@ if(!function_exists('array_find'))
 if(!function_exists('encode64'))
   {
     function encode64($data) { return base64_encode($data); }
-    function decode64($data) 
+    function decode64($data)
     {
       # This is STRICT decoding
       if(@base64_encode(@base64_decode($data,true))==$data) return urldecode(@base64_decode($data));
@@ -108,11 +112,12 @@ if(!function_exists('smart_decode64'))
     function smart_decode64($data,$clean_this=true)
     {
       /*
-       * Take in a base 64 object, decode it. Pass back an array 
+       * Take in a base 64 object, decode it. Pass back an array
        * if it's a JSON, and sanitize the elements in any case.
        */
       if(is_null($data)) return null; // in case emptyness of data is meaningful
-      $r = urldecode(base64_decode($data));
+      #$r = urldecode(base64_decode($data));
+      $r = base64_decode(urldecode($data));
       if($r===false) return false;
       $jd=json_decode($r,true);
       $working= is_null($jd) ? $r:$jd;
@@ -156,7 +161,7 @@ if(!function_exists('strbool'))
     {
       // returns the boolean of a string 'true' or 'false'
       if(is_bool($string)) return $string;
-      if(is_string($string)) 
+      if(is_string($string))
       {
         if(preg_match("/[0-1]/",$string)) return intval($string) == 1 ? true:false;
         return strtolower($string)==='true' ? true:false;
@@ -219,7 +224,7 @@ if(!function_exists("do_post_request"))
        * @param array $data The paramter as key/value pairs
        * @return response object
        ***/
-      
+
       $params = array('http' => array(
         'method' => 'POST',
         'content' => http_build_query($data)
