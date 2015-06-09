@@ -218,7 +218,7 @@ $loginform = "
 	      <label for='password' class='col-sm-3 col-md-2'>
 		Password:
 	      </label>
-	      <input class='col-sm-5 col-md-3' type='password' name='password' id='password' placeholder='Password' class='password-input' required='required'/>
+	      <input class='col-sm-5 col-md-3 password-input' type='password' name='password' id='password' placeholder='Password' required='required'/>
 </div>
 </fieldset>";
 $loginform_close="	      <br/>

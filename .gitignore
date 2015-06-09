@@ -217,8 +217,12 @@ pip-log.txt
 config.php
 CONFIG.php
 
+
+node_modules/
 # Emacs autorecover
+\#*
+.\#*
 \#*\#
-node_modules
+*.*~
 braintree_key_config.php
 stripe_key_config.php

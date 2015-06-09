@@ -39,7 +39,7 @@ class Services_Twilio_Twiml {
             }
             break;
         default:
-            throw new Services_Twilio_TwimlException('Invalid argument');
+            throw new TwimlException('Invalid argument');
         }
     }
 

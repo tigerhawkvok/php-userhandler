@@ -29,7 +29,7 @@ Considering replacing the "current" [reCAPTCHA](https://developers.google.com/re
 - [base32](https://github.com/ChristianRiesen/base32) is a subtree in the `base32/` directory. The relevant file is `base32/src/Base32/Base32.php`. The command to update this is `git subtree pull --prefix base32 base32 master --squash`
 - [phpqrcode](https://github.com/t0k4rt/phpqrcode) is a subtree in the `qr/` directory. The relevant file is `qr/qrlib.php`. The command to update this is `git subtree pull --prefix qr qr master --squash`
 - [twilio-php](https://github.com/twilio/twilio-php) is a subtree in the `twilio/` directory. The relevant file is `twilio/Services/Twilio.php`. The command to update this is `git subtree pull --prefix twilio twilio master --squash`
-- [php-stronghash](https://github.com/tigerhawkvok/php-stronghash) is a subtree in the `stronghash/` directory. The relevant file is `stronghash/php-stronghash.php`. The command to update this is `git subtree pull --prefix stronghash php-stronghash master --squash`.
+- [php-core](https://github.com/tigerhawkvok/php-core.git) is a subtree in the `core/` directory. The relevant file is `core/core.php`. The command to update this is `git subtree pull --prefix core core master --squash`.
 - [zxcvbn](https://github.com/dropbox/zxcvbn) is a subtree in the `js/zxcvbn` directory. The relevant file is `js/zxcvbn/zxcvbn.js`. The command to update this is `git subtree pull --prefix js/zxcvbn zxcvbn master --squash`.
 
 

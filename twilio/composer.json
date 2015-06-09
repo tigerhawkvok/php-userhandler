@@ -20,9 +20,11 @@
     },
     "require-dev": {
         "mockery/mockery": ">=0.7.2",
-        "phpunit/phpunit": "4.5.*"
+        "phpunit/phpunit": "3.7.*"
     },
     "autoload": {
-        "files": ["Services/Twilio.php"]
+        "psr-0": {
+            "Services_Twilio": ""
+        }
     }
 }

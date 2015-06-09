@@ -2,7 +2,21 @@
 
 ## Installation
 
-You can install **twilio-php** via composer or by downloading the source.
+You can install **twilio-php** via PEAR or by downloading the source.
+
+#### Via PEAR (>= 1.9.3):
+
+PEAR is a package manager for PHP. Open a command line and use these PEAR
+commands to download the helper library:
+
+    $ pear channel-discover twilio-pear.herokuapp.com/pear
+    $ pear install twilio/Services_Twilio
+
+If you get the following message:
+
+    $ -bash: pear: command not found
+
+you can install PEAR from their website, or download the source directly.
 
 #### Via Composer:
 
@@ -114,9 +128,9 @@ Library Documentation")
 * PHP >= 5.2.3
 * The PHP JSON extension
 
-# Getting help
+## Reporting Issues
 
-If you need help installing or using the library, please contact Twilio Support at help@twilio.com first. Twilio's Support staff are well-versed in all of the Twilio Helper Libraries, and usually reply within 24 hours.
-
-If you've instead found a bug in the library or would like new features added, go ahead and open issues or pull requests against this repo!
+We would love to hear your feedback. Report issues using the [Github
+Issue Tracker](https://github.com/twilio/twilio-php/issues) or email
+[help@twilio.com](mailto:help@twilio.com).
 

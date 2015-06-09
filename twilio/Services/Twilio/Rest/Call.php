@@ -42,7 +42,7 @@
  *      A string representing the status of the call. May be `QUEUED`, `RINGING`,
  *      `IN-PROGRESS`, `COMPLETED`, `FAILED`, `BUSY` or `NO_ANSWER`.
  *
- *   .. php:attr:: start_time
+ *   .. php:attr:: stat_time
  *
  *      The start time of the call, given as GMT in RFC 2822 format. Empty if the call has not yet been dialed.
  *
@@ -102,15 +102,5 @@ class Services_Twilio_Rest_Call extends Services_Twilio_InstanceResource {
             'recordings',
             'feedback'
         );
-    }
-
-    /**
-     * Make a request to delete the specified resource.
-     *
-     * :rtype: boolean
-     */
-    public function delete()
-    {
-        return $this->client->deleteData($this->uri);
     }
 }
