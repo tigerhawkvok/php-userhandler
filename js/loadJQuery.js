@@ -10,13 +10,14 @@ function cascadeJQLoad(i) { // Use alternate CDNs where appropriate to load jQue
         "ajax.googleapis.com/ajax/libs/jquery/2.1.1/jquery.min.js",
         "ajax.aspnetcdn.com/ajax/jQuery/jquery-2.1.1.min.js",
         "https://code.jquery.com/jquery-2.1.1.min.js",
-        "cdnjs.cloudflare.com/ajax/libs/jquery/2.1.1/jquery.min.js"
+        "cdnjs.cloudflare.com/ajax/libs/jquery/2.1.1/jquery.min.js",
+        "../bower_components/jquery/dist/jquery.min.js"
     ];
     // Paths to your libraries that require jQuery, relative to this file
     var dependent_libraries = [
         "jquery.cookie.min.js",
         "purl.min.js",
-        "base64.min.js",
+        "../bower_components/js-base64/base64.min.js",
         "c.min.js"
     ];
     if (window.jQuery !== undefined) {
@@ -50,7 +51,6 @@ function loadJQ(jq_path, i, libs) { //load jQuery if it isn't already
     window.onload = function() {
         if (window.jQuery === undefined) loadNextJQ();
         else {
-            console.log("Loading libraries",libs);
             // Load libraries that rely on jQuery
             if (typeof(libs) == "object") {
                 try {
@@ -93,7 +93,6 @@ function loadJS(src, callback) {
     s.onreadystatechange = s.onload = function() {
         var state = s.readyState;
         try {
-            console.log("Loaded",src)
             if (!callback.done && (!state || /loaded|complete/.test(state))) {
                 callback.done = true;
                 callback();

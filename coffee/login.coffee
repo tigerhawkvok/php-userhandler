@@ -6,7 +6,7 @@ window.passwords.badbg = "#e5786d"
 # Password lengths can be overriden in CONFIG.php,
 # which then defines the values for these before the script loads.
 window.passwords.minLength ?= 8
-window.passwords.overrideLength ?= 21
+window.passwords.overrideLength ?= 20
 
 if typeof window.totpParams isnt 'object' then window.totpParams = new Object()
 window.totpParams.popClass = "pop-panel"
@@ -20,33 +20,50 @@ if not window.totpParams.subdirectory?
   window.totpParams.subdirectory = ""
 window.totpParams.mainStylesheetPath = window.totpParams.relative+"css/otp_styles.css"
 window.totpParams.popStylesheetPath = window.totpParams.relative+"css/otp_panels.css"
+window.totpParams.combinedStylesheetPath = window.totpParams.relative+"css/otp.min.css"
 
-checkPasswordLive = ->
+checkPasswordLive = (selector = "#createUser_submit") ->
   pass = $("#password").val()
   re = new RegExp("^(?:(?=^.{#{window.passwords.minLength},}$)((?=.*\\d)|(?=.*\\W+))(?![.\\n])(?=.*[A-Z])(?=.*[a-z]).*$)$")
   if pass.length >window.passwords.overrideLength or pass.match(re)
-    $("#password").css("background",window.passwords.goodbg)
+    $("#password")
+    .css("background",window.passwords.goodbg)
+    .parent().parent().removeClass("has-error")
+    .addClass("has-success")
+    $("#feedback-status-1").replaceWith("<span id='feedback-status-1' class='glyphicon glyphicon-ok form-control-feedback' aria-hidden='true'></span>")
     window.passwords.basepwgood = true
   else
-    $("#password").css("background",window.passwords.badbg)
+    $("#password")
+    .css("background",window.passwords.badbg)
+    .parent().parent().removeClass("has-success")
+    .addClass("has-error")
+    $("#feedback-status-1").replaceWith("<span id='feedback-status-1' class='glyphicon glyphicon-remove form-control-feedback' aria-hidden='true'></span>")
     window.passwords.basepwgood = false
   evalRequirements()
   if not isNull($("#password2").val())
-    checkMatchPassword()
-    toggleNewUserSubmit()
+    checkMatchPassword(selector)
+    toggleNewUserSubmit(selector)
   return false
 
-checkMatchPassword = ->
+checkMatchPassword = (selector = "#createUser_submit") ->
   if $("#password").val() is $("#password2").val()
-    $('#password2').css('background', window.passwords.goodbg)
+    $('#password2')
+    .css('background', window.passwords.goodbg)
+    .parent().parent().removeClass("has-error")
+    .addClass("has-success")
+    $("#feedback-status-2").replaceWith("<span id='feedback-status-2' class='glyphicon glyphicon-ok form-control-feedback' aria-hidden='true'></span>")
     window.passwords.passmatch = true
   else
-    $('#password2').css('background', window.passwords.badbg)
+    $('#password2')
+    .css('background', window.passwords.badbg)
+    .parent().parent().removeClass("has-success")
+    .addClass("has-error")
+    $("#feedback-status-2").replaceWith("<span id='feedback-status-2' class='glyphicon glyphicon-remove form-control-feedback' aria-hidden='true'></span>")
     window.passwords.passmatch = false
-  toggleNewUserSubmit()
+  toggleNewUserSubmit(selector)
   return false
 
-toggleNewUserSubmit = ->
+toggleNewUserSubmit = (selector = "#createUser_submit") ->
   try
     dbool = not(window.passwords.passmatch && window.passwords.basepwgood)
     $("#createUser_submit").attr("disabled",dbool)
@@ -55,11 +72,13 @@ toggleNewUserSubmit = ->
     window.passwords.basepwgood = false
 
 evalRequirements = ->
-  max_strength = 5; # 60*60*24*365*200; # 200 years
   unless $("#strength-meter").exists()
-    html = "<div id='strength-meter'><div id='strength-requirements'><p style='float:left;margin-top:2em'>Character Classes:</p><div id='strength-alpha'><p class='label'>a</p><div class='strength-eval'></div></div><div id='strength-alphacap'><p class='label'>A</p><div class='strength-eval'></div></div><div id='strength-numspecial'><p class='label'>1/!</p><div class='strength-eval'></div></div></div><div id='strength-bar'><label for='password-strength'>Strength: </label><progress id='password-strength' max='#{max_strength}'></progress><p>Time to crack: <span id='crack-time'></span></p></div></div>"
-    notice = "<p><small>We require a password of at least #{window.passwords.minLength} characters with at least one upper case letter, at least one lower case letter, and at least one digit or special character. You can also use <a href='http://imgs.xkcd.com/comics/password_strength.png'>any long password</a> of at least #{window.passwords.overrideLength} characters, with no security requirements.<br/>Remember your security best practices! Do not use the same password you use for other sites. While your information is <a href='http://en.wikipedia.org/wiki/Cryptographic_hash_function' class='newwindow'>hashed</a> with a multiple-round hash function, <a href='http://arstechnica.com/security/2013/05/how-crackers-make-minced-meat-out-of-your-passwords/' class='newwindow'>passwords are easy to crack!</a></small></p>"
-    $("#password_security").html(html + notice)
+    html = "<h4>Password Requirements</h4><div id='strength-meter'><div id='strength-requirements'><p style='float:left;margin-top:2em;font-weight:700;'>Character Classes:</p><div id='strength-alpha'><p class='label'>a</p><div class='strength-eval'></div></div><div id='strength-alphacap'><p class='label'>A</p><div class='strength-eval'></div></div><div id='strength-numspecial'><p class='label'>1/!</p><div class='strength-eval'></div></div></div><div id='strength-bar'><label for='password-strength'>Strength: </label><progress id='password-strength' max='5'></progress><p>Time to crack: <span id='crack-time'></span></p></div></div>"
+    notice = "<br/><br/><p>We require a password of at least #{window.passwords.minLength} characters with at least one upper case letter, at least one lower case letter, and at least one digit or special character.</p><p>You can also use <a href='http://imgs.xkcd.com/comics/password_strength.png'>any long password</a> of at least #{window.passwords.overrideLength} characters, with no security requirements.</p>"
+    $("#password_security")
+    .html(html + notice)
+    .removeClass('invisible')
+    $("#helpText").removeClass("invisible")
   pass = $("#password").val()
   pstrength = zxcvbn(pass)
   green_channel = (toInt(pstrength.score)+1) * 51
@@ -80,14 +99,13 @@ evalRequirements = ->
     $("<style type='text/css' id='dynamic' />").appendTo("head")
   $("#dynamic").text(webkit_css + moz_css)
   $(".strength-eval").css("background",window.passwords.badbg)
-  if pass.length > 20 then $(".strength-eval").css("background",window.passwords.goodbg)
+  if pass.length >= window.passwords.overrideLength then $(".strength-eval").css("background",window.passwords.goodbg)
   else
     if pass.match(/^(?:((?=.*\d)|(?=.*\W+)).*$)$/) then $("#strength-numspecial .strength-eval").css("background",window.passwords.goodbg)
     if pass.match(/^(?=.*[a-z]).*$/) then $("#strength-alpha .strength-eval").css("background",window.passwords.goodbg)
     if pass.match(/^(?=.*[A-Z]).*$/) then $("#strength-alphacap .strength-eval").css("background",window.passwords.goodbg)
   $("#password-strength").attr("value",pstrength.score+1);
   $("#crack-time").text(pstrength.crack_time_display)
-  mapNewWindows()
 
 doEmailCheck = ->
   # Perform a GET request to see if the chosen email is already taken
@@ -151,13 +169,13 @@ doTOTPRemove = ->
   noSubmit()
   animateLoad()
   user = $("#username").val()
-  pass = $("#password").val()
+  pass = encodeURIComponent($("#password").val())
   code = $("#code").val()
   url = $.url()
   ajaxLanding = "async_login_handler.php"
   urlString = url.attr('protocol') + '://' + url.attr('host') + '/' + window.totpParams.subdirectory + ajaxLanding
-  args = "action=removetotp&code=#{code}&username=#{user}&password=#{pass}"
-  remove_totp = $.get(urlString,args,'json')
+  args = "action=removetotp&code=#{code}&username=#{user}&password=#{pass}&base64=true"
+  remove_totp = $.post(urlString,args,'json')
   remove_totp.done (result) ->
     # Check the result
     unless result.status is true
@@ -165,6 +183,8 @@ doTOTPRemove = ->
       .text(result.human_error)
       .addClass("error")
       console.error(result.error)
+      console.warn("#{urlString}?#{args}")
+      console.warn(result)
       stopLoadError()
       return false
     # Removed!
@@ -190,7 +210,6 @@ makeTOTP = ->
   noSubmit()
   animateLoad()
   # Call up the function, and replace #totp_add with a new form to verify
-  $("#infotext").toggle(false)
   user = $("#username").val()
   password = $("#password").val()
   hash = $("#hash").val()
@@ -218,12 +237,12 @@ makeTOTP = ->
   <p style='font-weight:bold'>If you're unable to do so, <a href='#' id='#{show_secret_id}'>click here to manually input your key.</a></p>
   <div id='#{barcodeDiv}'>
     #{result.svg}
-    <p>Don't see the barcode? <a href='#' id='#{show_alt}'>Click here</a></p>
+    <p>Don't see the barcode? <a href='#' id='#{show_alt}' role='button' class='btn btn-link'>Click here</a></p>
   </div>
   <p>Once you've done so, enter the code generated by your app in the field below to verify your setup.</p>
   <fieldset>
     <legend>Confirmation</legend>
-    <input type='number' size='6' maxlength='6' id='code' name='code' placeholder='Code'/>
+    <input type='number' pattern='[0-9]{6}' size='6' maxlength='6' id='code' name='code' placeholder='Code'/>
     <input type='hidden' id='username' name='username' value='#{user}'/>
     <input type='hidden' id='hash' name='hash' value='#{hash}'/>
     <input type='hidden' id='secret' name='secret' value='#{key}'/>
@@ -249,8 +268,9 @@ makeTOTP = ->
       stopLoad()
     else
       console.error("Couldn't generate TOTP code",urlString  + "?" + args)
+      console.warn(result)
       $("#totp_message")
-      .text("There was an error generating your code. Please try again.")
+      .text("There was an error generating your code. #{result.message}")
       .addClass("error")
       stopLoadError()
   totp.fail (result,status) ->
@@ -278,7 +298,6 @@ saveTOTP = (key,hash) ->
     if result.status is true
       html = "<h1>Done!</h1><h2>Write down and save this backup code. Without it, you cannot disable two-factor authentication if you lose your device.</h2><pre id='backup_code'>#{result.backup}</pre><br/><button id='to_home'>Home &#187;</a>"
       $("#totp_add").html(html)
-      $("#infotext").toggle(true)
       $("#to_home").click ->
         window.location.href = window.totpParams.home
       stopLoad()
@@ -321,7 +340,6 @@ giveAltVerificationOptions = ->
   remove_id = "remove_totp_link"
   sms_id = "send_totp_sms"
   pane_id = "alt_auth_pane"
-  help_id = "totp_help"
   pane_messages = "alt_auth_messages"
 
   # Is it already there?
@@ -330,13 +348,13 @@ giveAltVerificationOptions = ->
     return false
 
   messages = new Object()
-  messages.remove = "<a href='#' id='#{remove_id}'>Remove two-factor authentication</a><br/><a href='#' id='#{help_id}'>Re-Show Help Screen</a>"
+  messages.remove = "<a href='#' id='#{remove_id}' role='button' class='btn btn-default'>Remove two-factor authentication</a>"
   # First see if the user can SMS at all before populating the message options
 
   sms = $.get(urlString,args,'json')
   sms.done (result) ->
     if result[0] is true
-      messages.sms = "<a href='#' id='#{sms_id}'>Send SMS</a>"
+      messages.sms = "<a href='#' id='#{sms_id}' role='button' class='btn btn-default'>Send SMS</a>"
     else
       console.warn("Couldn't get a valid result",result,urlString+"?"+args)
     pop_content = ""
@@ -346,8 +364,6 @@ giveAltVerificationOptions = ->
     # Attach it to DOM
     $("#totp_submit").after(html)
     # Attach event handlers
-    $("##{help_id}").click ->
-      showInstructions()
     $("##{sms_id}").click ->
       # Attempt to send the TOTP
       args = "action=sendtotptext&user=#{user}"
@@ -372,7 +388,7 @@ giveAltVerificationOptions = ->
     console.error("Could not check SMS-ability",result,status)
   sms.always ->
     $("##{remove_id}").click ->
-      html = "\n  <p id='totp_message' class='error'>Are you sure you want to disable two-factor authentication?</p>\n  <form id='totp_remove' onsubmit='event.preventDefault();'>\n    <fieldset>\n      <legend>Remove Two-Factor Authentication</legend>\n      <input type='email' value='#{user}' readonly='readonly' id='username' name='username'/><br/>\n      <input type='password' id='password' name='password' placeholder='Password'/><br/>\n      <input type='text' id='code' name='code' placeholder='Authenticator Code or Backup Code' size='32' maxlength='32' autocomplete='off'/><br/>\n      <button id='remove_totp_button' class='totpbutton'>Remove Two-Factor Authentication</button>\n    </fieldset>\n  </form>\n"
+      html = "\n  <p id='totp_message' class='error'>Are you sure you want to disable two-factor authentication?</p>\n  <form id='totp_remove' onsubmit='event.preventDefault();'>\n    <fieldset>\n      <legend>Remove Two-Factor Authentication</legend>\n      <input type='email' value='#{user}' readonly='readonly' id='username' name='username'/><br/>\n      <input type='password' id='password' name='password' placeholder='Password'/><br/>\n      <input type='text' id='code' name='code' placeholder='Authenticator Code or Backup Code' size='32' maxlength='32' autocomplete='off'/><br/>\n      <button id='remove_totp_button' class='totpbutton btn btn-danger'>Remove Two-Factor Authentication</button>\n    </fieldset>\n  </form>\n"
       $("#totp_prompt")
       .html(html)
       .attr("id","totp_remove_section")
@@ -470,16 +486,14 @@ showInstructions = (path = "help/instructions_pop.html") ->
   .fail (result,status) ->
     console.error("Failed to load instructions @ #{path}",result,status)
 
-
-
 showAdvancedOptions = (domain,has2fa) ->
   advancedListId = "advanced_options_list"
   if $("##{advancedListId}").exists()
     $("##{advancedListId}").toggle("fast")
     return true
   html = "<ul id='#{advancedListId}'>"
-  html += "<li><a href='?2fa=t'>Configure Two-Factor Authentication</a></li>"
-  html += "<li><a href='#' id='removeAccount'>Remove Account</a></li>"
+  html += "<li><a href='?2fa=t' role='button' class='btn btn-default'>Configure Two-Factor Authentication</a></li>"
+  html += "<li><a href='#' id='removeAccount' role='button' class='btn btn-default'>Remove Account</a></li>"
   $("#settings_list").after(html)
   $("#removeAccount").click ->
     removeAccount(this,"#{domain}_user",has2fa)
@@ -491,12 +505,14 @@ removeAccount = (caller,cookie_key,has2fa = true) ->
   removal_button = "remove_acct_button"
   section_id = "remove_account_section"
   tfaBlock = if has2fa then "\n      <input type='text' id='code' name='code' placeholder='Authenticator Code or Backup Code' size='32' maxlength='32' autocomplete='off'/><br/>" else ""
-  html = "<section id='#{section_id}'>\n  <p id='remove_message' class='error'>Are you sure you want to remove your account?</p>\n  <form id='account_remove' onsubmit='event.preventDefault();'>\n    <fieldset>\n      <legend>Remove My Account</legend>\n      <input type='email' value='#{username}' readonly='readonly' id='username' name='username'/><br/>\n      <input type='password' id='password' name='password' placeholder='Password'/><br/>#{tfaBlock}\n      <button id='#{removal_button}' class='totpbutton'>Remove My Account Permanantly</button> <button onclick=\"window.location.href=totpParams.home\">Back to Safety</button>\n    </fieldset>\n  </form>\n</section>"
+  html = "<section id='#{section_id}'>\n  <p id='remove_message' class='error'>Are you sure you want to remove your account?</p>\n  <form id='account_remove' onsubmit='event.preventDefault();'>\n    <fieldset>\n      <legend>Remove My Account</legend>\n      <input type='email' value='#{username}' readonly='readonly' id='username' name='username'/><br/>\n      <input type='password' id='password' name='password' placeholder='Password'/><br/>#{tfaBlock}\n      <button id='#{removal_button}' class='totpbutton btn btn-danger'>Remove My Account Permanantly</button> <button onclick=\"window.location.href=totpParams.home\" class='btn btn-primary'>Back to Safety</button>\n    </fieldset>\n  </form>\n</section>"
   if $("#login_block").exists()
     $("#login_block").replaceWith(html)
   else
     $(caller).after(html)
   $("##{removal_button}").click ->
+    doRemoveAccountAction()
+  $("#account_remove").submit ->
     doRemoveAccountAction()
 
 doRemoveAccountAction = ->
@@ -537,7 +553,174 @@ noSubmit = ->
   event.preventDefault()
   event.returnValue = false
 
+doAsyncLogin = (uri = "async_login_handler.php", respectRelativePath = true) ->
+  noSubmit()
+  if respectRelativePath
+    urlString = url.attr('protocol') + '://' + url.attr('host') + '/' + window.totpParams.subdirectory + uri
+  else
+    urlString = uri
+  username = $("#username").val()
+  password = $("#password").val()
+  pass64 = Base64.encodeURI(password)
+  args = "action=dologin&username=#{username}&password=#{pass64}&b64=true"
+  # Submit and check the login request
+  false
+
+doAsyncCreate = ->
+  recaptchaResponse = grecaptcha.getResponse()
+  if recaptchaResponse.success isnt true
+    # Bad CAPTCHA
+    $("#createUser_submit").before("<p id='createUser_fail' class='bg-danger'>Sorry, your CAPTCHA was incorrect. Please try again.</p>")
+    grecaptcha.reset()
+    return false
+  $("#createUser_fail").remove()
+  # Submit the user creation
+  false
+
+
+resetPassword = ->
+  ###
+  # Reset the user password
+  ###
+  # Remove the password field and replace the login button, rebind
+  # events
+  $("#password").remove()
+  $("#login_button").remove()
+  html = "<button id='login_button' class='btn btn-danger'>Check User</button>"
+  pane_messages = "reset-user-messages"
+  $("#login").before("<div id='#{pane_messages}'")
+  $("#login").append(html)
+  $("##{pane_messages}")
+  .addClass("bg-warning")
+  .text("Once your password has been reset, your old password will be invalid.")
+  resetFormSubmit = ->
+    url = $.url()
+    ajaxLanding = "async_login_handler.php"
+    urlString = url.attr('protocol') + '://' + url.attr('host') + '/' + window.totpParams.subdirectory + ajaxLanding
+    user = $("#username").val()
+    args = "action=resetpass&username=#{user}"
+    multiOptionBinding = (pargs = args) ->
+      $(".reset-pass-button").click ->
+        method = $(this).attr("data-method")
+        pargs = "#{pargs}&method=#{method}"
+        # Check it!
+        $.post(urlString,pargs,"json")
+        .done (result) ->
+          if result.status is false
+            $("##{pane_messages}")
+            .removeClass("bg-warning bg-primary")
+            .addClass("bg-danger")
+            .text("There was a problem resetting your password. Please try again")
+            # Console
+          else
+            $("##{pane_messages}")
+            .removeClass("bg-warning bg-danger")
+            .addClass("bg-primary")
+            .text("Check your #{method} for your new password. We strongly encourage you to change it!")
+          false
+        .fail (result,status) ->
+          false
+        false
+      false
+    $.get(urlString,args,"json")
+    .done (result) ->
+      if result.status is false
+        # Do stuff based on the action
+        $("#username").prop("disabled",true)
+        switch result.action
+          when "GET_TOTP"
+            # Replace and rebind form to get the TOTP value
+            # If the user canSMS, then present that as a button option
+            usedSms = false
+            html = "<div id='start-reset-process'><button id='totp-submit' class='btn btn-primary'>Verify</button></div>"
+            $("#login").append(html)
+            if result.canSMS
+              sms_id = "reset-user-sms-totp"
+              text_html = "<button class='btn btn-default' id='#{sms_id}'>Text Code</button>"
+              $("#start-reset-process").append(text_html)
+              $("##{sms_id}").click ->
+                # Attempt to send the TOTP
+                smsArgs = "action=sendtotptext&user=#{user}"
+                sms_totp = $.get(urlString,smsArgs,'json')
+                console.log("Sending message ...",urlString+"?"+args)
+                sms_totp.done (result) ->
+                  if result.status is true
+                    # Alert the user
+                    $("##{pane_messages}")
+                    .text("Your code has been sent to your registered number.")
+                    .removeClass("bg-warning bg-danger")
+                    .addClass("bg-primary")
+                    usedSms = true
+                  else
+                    #Place a notice in pane_messages
+                    $("##{pane_messages}")
+                    .addClass("bg-danger")
+                    .text(result.human_error)
+                    console.error(result.error)
+                sms_totp.fail (result,status) ->
+                  $("##{pane_messages}")
+                  .addClass("bg-danger")
+                  .text("There was a problem sending your text. Please try again.")
+                  console.error("AJAX failure trying to send TOTP text",urlString + "?" + args)
+                  console.error("Returns:",result,status)
+            doTotpSubmission = ->
+              totpValue = $("#totp").val()
+              args = "#{args}&totp=#{totpValue}"
+              # Now draw the thing
+              $("#start-reset-process").remove()
+              html = ""
+              if result.canSMS and usedSms isnt true
+                # Show an option to get a text reset password
+                html = "<button class='reset-pass-button btn btn-primary' data-method='text'>Text New Password</button>"
+                false
+              html = "#{html}<button class='reset-pass-button btn btn-primary' data-method='email'>Email New Password</button>"
+              $("#login").append(html)
+              multiOptionBinding(args)
+              false
+            $("#totp-submit").click ->
+              noSubmit()
+              doTotpSubmission()
+            $("#login-totp-form").submit ->
+              noSubmit()
+              doTotpSubmission()
+          when "NEED_METHOD"
+            # Draw a button to send a text AND button to email
+            $("#login_button").remove()
+            html = "<button class='reset-pass-button btn btn-primary' data-method='text'>Text New Password</button>"
+            html = "#{html}<button class='reset-pass-button btn btn-primary' data-method='email'>Email New Password</button>"
+            $("#login").append(html)
+            multiOptionBinding()
+            false
+          when "BAD_USER"
+            # Bad user
+            $("##{pane_messages}")
+            .addClass("bg-danger")
+            .text("Sorry, that user doesn't exist.")
+            $("#username")
+            .prop("disabled",false)
+            .val("")
+            false
+      # Otherwise, it's good, and an email has been sent
+      $("##{pane_messages}")
+      .removeClass("bg-warning")
+      .addClass("bg-primary")
+      .text("Check your email for your new password. We strongly encourage you to change it!")
+      false
+    .fail (result,status) ->
+      false
+  $("#login_button").click ->
+    noSubmit()
+    resetFormSubmit()
+  $("#login").submit ->
+    noSubmit()
+    resetFormSubmit()
+
+
 $ ->
+  if not window.passwords.submitSelector?
+    selector = "#createUser_submit"
+  else
+    selector = window.passwords.submitSelector
   if $("#password.create").exists()
     loadJS(window.totpParams.relative+"js/zxcvbn/zxcvbn.js")
     $("#password.create")
@@ -550,6 +733,21 @@ $ ->
       checkMatchPassword()
     .keyup ->
       checkMatchPassword()
+    $("input")
+    .addClass("form-control")
+    .parent().addClass("form-inline")
+    .blur ->
+      checkPasswordLive()
+    $("#password")
+    .after("<span id='feedback-status-1'></span>")
+    .parent().removeClass("form-inline")
+    .parent().addClass("has-feedback")
+    .parent().addClass("form-horizontal")
+    $("#password2")
+    .after("<span id='feedback-status-2'></span>")
+    .parent().removeClass("form-inline")
+    .parent().addClass("has-feedback")
+    .parent().addClass("form-horizontal")
   $("#totp_submit").submit ->
     doTOTPSubmit()
   $("#verify_totp_button").click ->
@@ -579,19 +777,15 @@ $ ->
     showAdvancedOptions(domain,has2fa)
   try
     if $.url().param("showhelp")? then showInstructions()
-    if $.url().param("q")?
-      $("#goals").addClass("hide")
-      $("#goals-list").addClass("hide")
   catch e
     delay 300, ->
       if $.url().param("showhelp")? then showInstructions()
-    if $.url().param("q")?
-      $("#goals").addClass("hide")
-      $("#goals-list").addClass("hide")
+  $("#next.continue").click ->
+    window.location.href = window.totpParams.home
   # Load stylesheets
   $("<link/>",{
     rel:"stylesheet"
     type:"text/css"
     media:"screen"
-    href:window.totpParams.mainStylesheetPath
+    href:window.totpParams.combinedStylesheetPath
     }).appendTo("head")

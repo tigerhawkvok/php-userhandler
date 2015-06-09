@@ -192,7 +192,6 @@ $RECYCLE.BIN/
 # Packages
 *.egg
 *.egg-info
-dist/
 build/
 eggs/
 parts/
@@ -218,11 +217,12 @@ pip-log.txt
 config.php
 CONFIG.php
 
-# Emacs autorecover
-\#*\#
+
 node_modules/
+# Emacs autorecover
 \#*
 .\#*
 \#*\#
 *.*~
 braintree_key_config.php
+stripe_key_config.php

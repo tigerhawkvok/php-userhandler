@@ -172,19 +172,27 @@ stopLoadError = (elId="#status-container") ->
 
 $ ->
   try
-    window.picturefill()
+    if typeof picturefill is "function"
+      window.picturefill()
   catch e
     # We don't actually care here, probably hasn't been imported
-    console.log("Could not execute picturefill.")
+    console.warn("Could not execute picturefill.")
   mapNewWindows()
+  # Load any calls the script asked for
   try
     window.totpParams.tfaLock ?= false
     window.latejs ?= new Object()
     window.latejs.done ?= false
     if window.latejs.done isnt true and window.totpParams.tfaLock isnt true
-      lateJS()
-      console.log("Loaded deferred calls ... ")
-    else
-      console.log("Already loaded latejs")
+      # Has the user embedded their own scripts?
+      if typeof lateJS is "function"
+        lateJS()
   catch e
-    console.error("Couldn't call lateJS",e)
+    console.warn("There was an error calling lateJS(). If you haven't set that up, you can safely ignore this.")
+  try
+    # The really last stuff
+    if typeof loadLast is "function"
+      loadLast()
+  catch e
+    console.warn("There was an error calling loadLast(). This may result in unexpected behaviour.")
+    

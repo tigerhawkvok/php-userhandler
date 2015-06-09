@@ -9,6 +9,7 @@ $captive_login=false;
 $debug=false;
 $use_javascript_cookies=false;
 $redirect_to_home = true;
+$displaywarnings = true;
 
 $require_two_factor = false;
 
@@ -20,9 +21,15 @@ $post_create_redirect = false;
 
 $baseurl = ""; # define if other than the hosted URL
 $redirect_url = ""; # define if other than the hosted URL
+$login_url = ""; # define if other than the hosted URL
+# Usually only have to change this on strange configurations
+$self_referential = $_SERVER['PHP_SELF'];
 
-# Path to this library from callers, relative to the top level
-$relative_path = "";
+# Path to this library from callers, relative to the top level.
+# Used mostly for AJAX calls.
+$working_subdirectory = "/";
+# Relative path from the pages it's embedded in. Often the same as above.
+$relative_path = "/";
 
 $site_name = "";
 
@@ -65,6 +72,11 @@ $profile_picture_storage = $user_data_storage.'';
  ***/
 
 $needs_manual_authentication = false;
+$is_smtp = false;
+$is_pop3 = false;
+$mail_host = "";
+$mail_user = "";
+$mail_password = "";
 
 
 /***
@@ -93,6 +105,7 @@ $db_cols=array(
   "defaults"=>"text",
   "public_key"=>"text",
   "private_key"=>"text",
+  "app_key"=>"text",
   "secret"=>"varchar(255)",
   "emergency_code"=>"varchar(255)",
   "phone"=>"varchar(20)",
@@ -110,6 +123,9 @@ $cookie_ver_column = "auth_key";
 
 $totp_column = "secret";
 $totp_rescue = "emergency_code";
+
+$app_column = "app_key";
+
 # See https://github.com/tigerhawkvok/php-userhandler/blob/master/totp/doc/Use.md#digest-algorithm
 # Leave as sha1 for compatibility with Google Authenticator
 $totp_digest = "sha1";

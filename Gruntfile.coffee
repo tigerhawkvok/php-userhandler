@@ -10,9 +10,7 @@ module.exports = (grunt) ->
   # https://github.com/gruntjs/grunt-contrib-watch
   grunt.loadNpmTasks("grunt-contrib-watch")
   grunt.loadNpmTasks("grunt-contrib-uglify")
-  # https://github.com/mathiasbynens/grunt-yui-compressor
-  # May end up porting to https://github.com/gruntjs/grunt-contrib-uglify
-  grunt.loadNpmTasks('grunt-yui-compressor')
+  grunt.loadNpmTasks("grunt-contrib-cssmin")
   # https://www.npmjs.com/package/grunt-phplint
   grunt.loadNpmTasks("grunt-phplint");
   grunt.initConfig
@@ -63,9 +61,12 @@ module.exports = (grunt) ->
         files:
           "js/loadJQuery.min.js": ["js/loadJQuery.js"]
     cssmin:
-      dist:
-        src:["css/otp_panels.css","css/otp_styles.css"]
-        dest:"css/otp.min.css"
+      options:
+        sourceMap: true
+        advanced: false
+      target:
+        files:
+          "css/otp.min.css":["css/otp_styles.css","css/otp_panels.css"]
     coffee:
       compile:
         options:
@@ -96,7 +97,7 @@ module.exports = (grunt) ->
   # Part 1
   grunt.registerTask("minifyIndependent","Minify Bower components that aren't distributed min'd",["uglify:minpurl","uglify:minjcookie","uglify:minljq"])
   # Part 2
-  grunt.registerTask("minifyBulk","Minify all the things",["uglify:combine","uglify:dist","cssmin:dist"])
+  grunt.registerTask("minifyBulk","Minify all the things",["uglify:combine","uglify:dist","cssmin"])
   # Main call
   grunt.registerTask "minify","Minify all the things",->
     grunt.task.run("minifyIndependent","minifyBulk")

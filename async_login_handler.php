@@ -1,8 +1,11 @@
 <?php
 
+if(!isset($print_login_state)) $print_login_state = true;
+
+require_once(dirname(__FILE__).'/CONFIG.php');
+require_once(dirname(__FILE__).'/core/core.php');
 require_once(dirname(__FILE__).'/handlers/login_functions.php');
-require_once(dirname(__FILE__).'/handlers/functions.inc');
-require_once(dirname(__FILE__).'/handlers/db_hook.inc');
+#require_once(dirname(__FILE__).'/handlers/db_hook.inc');
 
 function returnAjax($data)
 {
@@ -10,6 +13,11 @@ function returnAjax($data)
   header('Cache-Control: no-cache, must-revalidate');
   header('Expires: Mon, 26 Jul 1997 05:00:00 GMT');
   header('Content-type: application/json');
+  global $billingTokens;
+  if(is_array($billingTokens))
+  {
+    $data["billing_meta"] = $billingTokens;
+  }
   print @json_encode($data,JSON_FORCE_OBJECT);
   exit();
 }
@@ -17,55 +25,59 @@ function returnAjax($data)
 parse_str($_SERVER['QUERY_STRING'],$_GET);
 $do=isset($_REQUEST['action']) ? strtolower($_REQUEST['action']):null;
 
-switch($do)
+if($print_login_state === true)
   {
-  case 'get_login_status':
-    returnAjax(getLoginState($_REQUEST));
-    break;
-  case 'write':
-    returnAjax(saveToUser($_REQUEST));
-    break;
-  case 'get':
-    returnAjax(getFromUser($_REQUEST));
-    break;
-  case "maketotp":
-    returnAjax(generateTOTPForm($_REQUEST));
-    break;
-  case "verifytotp":
-    returnAjax(verifyTOTP($_REQUEST));
-    break;
-  case "savetotp":
-    returnAjax(saveTOTP($_REQUEST));
-    break;
-  case "removetotp":
-    returnAjax(removeTOTP($_REQUEST));
-    break;
-  case "sendtotptext":
-    returnAjax(sendTOTPText($_REQUEST));
-    break;
-  case "totpstatus":
-    returnAjax(hasTOTP($_REQUEST));
-    break;
-  case "cansms":
-    returnAjax(canSMS($_REQUEST));
-    break;
-  case "verifyphone":
-    returnAjax(verifyPhone($_REQUEST));
-    break;
-  case "removeaccount":
-    returnAjax(removeAccount($_REQUEST));
-    break;
-  default:
-    returnAjax(getLoginState($_REQUEST),true);
+    switch($do)
+      {
+      case 'get_login_status':
+        returnAjax(getLoginState($_REQUEST));
+        break;
+      case 'write':
+        returnAjax(saveToUser($_REQUEST));
+        break;
+      case 'get':
+        returnAjax(getFromUser($_REQUEST));
+        break;
+      case "maketotp":
+        returnAjax(generateTOTPForm($_REQUEST));
+        break;
+      case "verifytotp":
+        returnAjax(verifyTOTP($_REQUEST));
+        break;
+      case "savetotp":
+        returnAjax(saveTOTP($_REQUEST));
+        break;
+      case "removetotp":
+        returnAjax(removeTOTP($_REQUEST));
+        break;
+      case "sendtotptext":
+        returnAjax(sendTOTPText($_REQUEST));
+        break;
+      case "totpstatus":
+        returnAjax(hasTOTP($_REQUEST));
+        break;
+      case "cansms":
+        returnAjax(canSMS($_REQUEST));
+        break;
+      case "verifyphone":
+        returnAjax(verifyPhone($_REQUEST));
+        break;
+      case "removeaccount":
+        returnAjax(removeAccount($_REQUEST));
+        break;
+      default:
+        returnAjax(getLoginState($_REQUEST,true));
+      }
   }
 
 function getLoginState($get,$default=false)
 {
+  global $login_url;
   $conf=$get['hash'];
   $s=$get['secret'];
   $id=$get['dblink'];
   $u=new UserFunctions();
-  return array("status"=>$u->validateUser($id,$conf,$s),'defaulted'=>$default);
+  return array("status"=>$u->validateUser($id,$conf,$s),'defaulted'=>$default,"login_url"=>$login_url);
 }
 
 function hasTOTP($get)
@@ -121,7 +133,6 @@ function generateTOTPForm($get)
   $r = $u->makeTOTP($domain);
 
   # Whether or not it fails, return $r
-
   return $r;
 }
 
@@ -315,6 +326,35 @@ function getFromUser($get) {
       else return array('status'=>false,'error'=>'Invalid user');
     }
   return array('status'=>false,'error'=>"One or more required fields were left blank");
+}
+
+function getProfileImage($profile) {
+    $u = new UserFunctions();
+    return array("status"=>true,"img"=>$u->getUserPicture($profile));
+}
+
+function setNewProfileImage($get) {
+    $conf=$get['hash'];
+    $s=$get['secret'];
+    $id=$get['dblink'];
+    if(!empty($conf) && !empty($s) && !empty($id))
+    {
+        $u=new UserFunctions();
+        if($u->validateUser($id,$conf,$s))
+        {
+            $result =  $u->setUserPicture($get);
+            if (!is_array($result)) $result = array("status"=>false,"error"=>"Invalid server response setting image","human_error"=>"There was a server error setting your image","app_error_code"=>121);
+            return $result;
+        }
+        else return array('status'=>false,'error'=>'Invalid user', "human_error"=>"The app could not authorize you to the server","app_error_code"=>106);
+    }
+    $emptyState = array(
+        "hash"   => $conf,
+        "secret" => $s,
+        "userid" => $id,
+        "provided"=>$get
+    );
+return array('status'=>false,'error'=>"One or more required fields were left blank","human_error"=>"There was a problem communicating with the server","app_error_code"=>107,"details"=>$emptyState);
 }
 
 ?>
