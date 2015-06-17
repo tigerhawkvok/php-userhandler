@@ -126,7 +126,7 @@ class UserFunctions extends DBHelper
 
     if(empty($baseurl))
       {
-        $baseurl = $proto . "://www.";
+        $baseurl = $proto . "://";
         $baseurl.=$_SERVER['HTTP_HOST'];
       }
 
@@ -138,7 +138,10 @@ class UserFunctions extends DBHelper
     $base = $base_arr[0];
     $url_parts = explode(".",$base);
     $tld = array_pop($url_parts);
-    $domain = array_pop($url_parts);
+    if($url_parts[0] == "www") {
+        $domain = array_pop($url_parts);
+    }
+    else $domain = implode(".",$url_parts);
     $shorturl = $domain . "." . $tld;
 
     $this->domain = $domain;
@@ -191,6 +194,7 @@ class UserFunctions extends DBHelper
         $mail->Username = $mail_user;
         $mail->Password = $mail_password;
         $mail->SMTPSecure = "tls";
+        $mail->Port = 587;
       }
     if($is_pop3) $mail->isPOP3(); # Need to expand this
     $mail->From = 'blackhole@'.$this->getShortUrl();
@@ -236,6 +240,14 @@ class UserFunctions extends DBHelper
      ***/
 
     if(empty($this->user) || !empty($user_id)) $this->setUser($user_id);
+    else if (empty($this->user))
+    {
+        # Try a cookie
+        $cookielink = $this->domain."_link";
+        $altcookielink = str_replace(".","_",$this->domain)."_link";
+        $ucookielink = empty($_COOKIE[$cookielink]) ? $altcookielink:$cookielink;
+        $this->setUser($ucookielink);
+    }
     $userdata = $this->user;
     $userdata["img"] = $this->getUserPicture();
     if(!array($userdata))
@@ -269,7 +281,9 @@ class UserFunctions extends DBHelper
      *
      * @param string|array $user_id Either a column/value pair or an ID for the default column
      ***/
-
+      $cookielink = $this->domain."_link";
+      $altcookielink = str_replace(".","_",$this->domain)."_link";
+      $ucookielink = empty($_COOKIE[$cookielink]) ? $altcookielink:$cookielink;
     if(!empty($user_id) && is_array($user_id) && sizeof($user_id) == 1)
       {
         # Specified as a column/value pair
@@ -281,10 +295,10 @@ class UserFunctions extends DBHelper
         # Just a id with the default column
         $col = $this->userColumn;
       }
-    else if(!empty($_COOKIE[$this->domain."_link"]))
+    else if(!empty($_COOKIE[$ucookielink]))
       {
         # See if we can get this from the cookies
-        $user_id=$_COOKIE[$this->domain."_link"];
+        $user_id=$_COOKIE[$ucookielink];
         $col = $this->linkColumn;
       }
 
@@ -933,7 +947,9 @@ class UserFunctions extends DBHelper
                 $auth_result = $this->requireUserAuth($user);
                 if($auth_result['mailer']['emails_sent'] != $auth_result['mailer']['attempts_made'])
                   {
-                    $message .= "<br/><small>Not all authentication validation emails could be sent, so please be sure to notify <a href='mailto:".$this->getSupportEmail()."?subject=Manual%20Validation'>email support with a description of this error</a> from the same email address you used to sign up.</small>";
+                      $mailer_copy = $auth_result["mailer"];
+                      unset($mailer_copy["destinations"]);
+                      $message .= "</h3></div><div class='alert alert-danger'><button type='button' class='close' data-dismiss='alert' aria-label='Close'><span aria-hidden='true'>&times;</span></button>Not all authentication validation emails could be sent, so please be sure to notify <a href='mailto:".$this->getSupportEmail()."?subject=Manual%20Validation'>email support with a description of this error</a> from the same email address you used to sign up.</small><br/>Error details:<code>".print_r($mailer_copy,true)."</code></div><div>";
                     unset($auth_result["status"]);
                   }
               }
@@ -1009,7 +1025,9 @@ class UserFunctions extends DBHelper
                             # Of course, this this was called asynchronously, the keys will be empty ...
 
                             $cookiekey=$this->domain."_secret";
+                            #$cookiekey=str_replace(".","_",$this->domain)."_secret";
                             $cookieauth=$this->domain."_auth";
+                            #$cookieauth=str_replace(".","_",$this->domain)."_auth";
 
                             $encrypted_secret = self::encryptThis($key,$_COOKIE[$cookiekey]);
                             $encrypted_hash = self::encryptThis($key,$_COOKIE[$cookieauth]);
@@ -1199,6 +1217,10 @@ class UserFunctions extends DBHelper
      * @param bool $detail Provide detailed returns
      * @return bool|array bool if $detail is false, array if $detail is true
      ***/
+      $cookiekey=$this->domain."_secret";
+      $altcookiekey=str_replace(".","_",$this->domain)."_secret";
+      $cookieauth=$this->domain."_auth";
+      $altcookieauth=str_replace(".","_",$this->domain)."_auth";
     if($userid === true)
       {
         # We are short-cutting getting the details back for the
@@ -1225,15 +1247,17 @@ class UserFunctions extends DBHelper
         if(empty($hash) || empty($secret))
           {
 
-            $cookiekey=$this->domain."_secret";
-            $cookieauth=$this->domain."_auth";
-
             $secret=$_COOKIE[$cookiekey];
             $hash=$_COOKIE[$cookieauth];
+            if(empty($hash) || empty($secret))
+            {
+                $secret=$_COOKIE[$altcookiekey];
+                $hash=$_COOKIE[$altcookieauth];
+            }
             $from_cookie=true;
             if(empty($hash) || empty($secret))
               {
-                if($detail) return array("state"=>false,"status"=>false,"error"=>"Empty verification tokens","uid"=>$userid,"salt"=>$salt,"calc_conf"=>$conf,"basis_conf"=>$hash,"have_secret"=>self::strbool(empty($secret)),"from_cookie"=>self::strbool($from_cookie));
+                  if($detail) return array("state"=>false,"status"=>false,"error"=>"Empty verification tokens","uid"=>$userid,"salt"=>$salt,"calc_conf"=>$conf,"basis_conf"=>$hash,"have_secret"=>self::strbool(!empty($secret)),"from_cookie"=>self::strbool($from_cookie),"cookie_checked"=>$cookiekey);
                 return false;
               }
           }
@@ -1244,14 +1268,14 @@ class UserFunctions extends DBHelper
         # Are they logging in from the same IP?
         if($userdata[$this->ipColumn] != $current_ip)
           {
-            if($detail) return array("state"=>false,"status"=>false,"error"=>"Different IP address on login","uid"=>$userid,"salt"=>$salt,"calc_conf"=>$conf,"basis_conf"=>$hash,"have_secret"=>self::strbool(empty($secret)),"from_cookie"=>self::strbool($from_cookie),"stored_ip"=>$userdata[$this->ipColumn],"current_ip"=>$current_ip);
+            if($detail) return array("state"=>false,"status"=>false,"error"=>"Different IP address on login","uid"=>$userid,"salt"=>$salt,"calc_conf"=>$conf,"basis_conf"=>$hash,"have_secret"=>self::strbool(!empty($secret)),"from_cookie"=>self::strbool($from_cookie),"stored_ip"=>$userdata[$this->ipColumn],"current_ip"=>$current_ip);
             return false;
           }
 
         $value_create=array($secret,$salt,$userdata[$this->cookieColumn],$userdata[$this->ipColumn],$this->getSiteKey());
 
         $conf=sha1(implode('',$value_create));
-        $state= $conf==$hash ? true:false;
+        $state= $conf == $hash;
         $error = null;
         if($state)
         {
@@ -1260,19 +1284,20 @@ class UserFunctions extends DBHelper
         else
         {
             $error = "Bad credentials";
+            $userdata = null;
         }
-        if($detail) return array('state'=>self::strbool($state),"status"=>$state,"uid"=>$userid,"salt"=>$salt,"calc_conf"=>$conf,"basis_conf"=>$hash,"from_cookie"=>self::strbool($from_cookie),'got_user_pass_info'=>is_array($pw_characters),'got_userdata'=>is_array($userdata),'source'=>$value_create,"error"=>$error);
+        if($detail) return array('state'=>self::strbool($state),"status"=>$state,"uid"=>$userid,"salt"=>$salt,"calc_conf"=>$conf,"basis_conf"=>$hash,"from_cookie"=>self::strbool($from_cookie),'got_user_pass_info'=>is_array($pw_characters),'got_userdata'=>is_array($userdata),"userdata"=>$userdata,'source'=>$value_create,"error"=>$error,"cookie_checked"=>$cookiekey);
         return $state;
       }
     else
       {
         // empty result
-        if($detail) return array("state"=>false,"status"=>false,"error"=>"Invalid userid lookup","uid"=>$userid,"col"=>$col,"basis_conf"=>$hash,"have_cookie_secret"=>self::strbool(empty($secret)));
+          if($detail) return array("state"=>false,"status"=>false,"error"=>"Invalid userid lookup","uid"=>$userid,"col"=>$col,"basis_conf"=>$hash,"have_cookie_secret"=>self::strbool(!empty($secret)),"cookie_checked"=>$cookiekey);
         return false;
       }
     if($detail)
       {
-        $detail=array("uid"=>$userid,'col'=>$col,"basis_conf"=>$hash,"have_secret"=>self::strbool(empty($secret)));
+          $detail=array("uid"=>$userid,'col'=>$col,"basis_conf"=>$hash,"have_secret"=>self::strbool(!empty($secret)),"cookie_checked"=>$cookiekey);
         if(is_array($result)) $detail['error']=$result['error'];
         return $detail;
       }
@@ -1748,7 +1773,7 @@ class UserFunctions extends DBHelper
             else if($this->canSMS(false) and $method == "sms")
             {
                 # The system can SMS ...
-                if(!$this->canSMS()) 
+                if(!$this->canSMS())
                 {
                     # The system can SMS but the user isn't verified, but asked
                     # for SMS verification.
@@ -1761,7 +1786,7 @@ class UserFunctions extends DBHelper
                     # can do this normally, now.
                 }
             }
-            else if(!$this->canSMS(false) and $method == "sms") 
+            else if(!$this->canSMS(false) and $method == "sms")
             {
                 # The system can't SMS
                 $callback = array("status"=>false,"action"=>"ILLEGAL_METHOD","error"=>"The system is not set up for SMS", "human_error"=>"The system requested to send a text message, but it's unsupported. Please try a different method.");
@@ -1807,9 +1832,9 @@ class UserFunctions extends DBHelper
             {
                 # Reset by email
                 include(dirname(__FILE__)."/../CONFIG.php");
-                $url = empty($login_url) ? "login.php":$login_url;
+                $url = !isset($login_url) ? "login.php":$login_url;
                 $rel_dir = str_replace($relative_path,"",$working_subdirectory);
-                if(substr($rel_dir,-1) != "/") $rel_dir = $rel_dir . "/";
+                if(substr($rel_dir,-1) != "/" && !empty($rel_dir)) $rel_dir = $rel_dir . "/";
                 $email_link = $this->getQualifiedDomain() . $rel_dir . $url ."?action=finishpasswordreset&key=".urlencode($user_tokens["key"])."&verify=".urlencode($user_tokens["verify"]) . "&user=".$this->getUsername();
                 $mail = $this->getMailObject();
                 $mail->Subject = "[". $this->getDomain() . "] Account Reset";
@@ -2167,9 +2192,9 @@ class UserFunctions extends DBHelper
     $components = $this->getAuthTokens($target_user[$this->linkColumn]);
     # Pull in the configuration files
     include(dirname(__FILE__)."/../CONFIG.php");
-    $url = empty($login_url) ? "login.php":$login_url;
+    $url = !isset($login_url) ? "login.php":$login_url;
     $rel_dir = str_replace($relative_path,"",$working_subdirectory);
-    if(substr($rel_dir,-1) != "/") $rel_dir = $rel_dir . "/";
+    if(substr($rel_dir,-1) != "/" && !empty($rel_dir)) $rel_dir = $rel_dir . "/";
     $link = $this->getQualifiedDomain() . $rel_dir . $url ."?confirm=true&token=".$components['auth']."&user=".$components['user']."&key=";
     # get all the administrative users, and encrypt the key with their
     # user DB link
@@ -2241,7 +2266,7 @@ class UserFunctions extends DBHelper
     try
       {
         $thisUserStatus = $this->validateUser(true);
-        $thisUserdata = $this->getUser();
+        $thisUserdata = $thisUserStatus["userdata"];
         $thisUserEmail = $thisUserdata[$this->usercol];
         if($thisUserStatus["status"] !== true)
           {
@@ -2254,7 +2279,10 @@ class UserFunctions extends DBHelper
       }
     catch(Exception $e)
       {
-        return array("status"=>false,"error"=>$e->getMessage(),"message"=>"Please log in before attempting to authenticate a user: ".$e->getMessage()."","cookie"=>$this->domain."_link","value"=>$_COOKIE[$this->domain."_link"],"userdata"=>$thisUserdata, "userstatus"=>$thisUserStatus);
+          $cookielink = $this->domain."_link";
+          $altcookielink = str_replace(".","_",$this->domain)."_link";
+          $ucookielink = empty($_COOKIE[$cookielink]) ? $altcookielink:$cookielink;
+          return array("status"=>false,"error"=>$e->getMessage(),"message"=>"Please log in before attempting to authenticate a user: ".$e->getMessage(),"cookie"=>$ucookielink,"value"=>$_COOKIE[$ucookielink],"userdata"=>$thisUserdata, "userstatus"=>$thisUserStatus);
       }
     $thisUserEmail = $thisUserdata[$this->userColumn];
     $target_user = array($this->linkColumn => $target_user);
@@ -2290,15 +2318,18 @@ class UserFunctions extends DBHelper
         return $ret;
       }
     $l = $this->openDB();
-    $query = "UPDATE `".$this->getTable()."` SET `flag`=TRUE WHERE `".$this->linkColumn."`='".$target_user."'";
+    $query = "UPDATE `".$this->getTable()."` SET `flag`=TRUE WHERE `".$this->linkColumn."`='".$target_user[$this->linkColumn]."'";
     $r = mysqli_query($l,$query);
     if($r === false)
       {
         $ret['status'] = false;
         $ret['message'] = "MySQL error";
-        $ret['error'] = mysqli_error($l);
+        $ret['error'] = "MySQL error: " . mysqli_error($l);
       }
-    $ret['status'] = true;
+    else
+    {
+        $ret['status'] = true;   
+    }
     $mail = $this->getMailObject();
 
     # Let the user know
@@ -2306,7 +2337,16 @@ class UserFunctions extends DBHelper
     $mail->Body = "<p>Your access to ".$this->getDomain()." as been enabled. <a href='".$this->getQualifiedDomain()."'>Click here to visit the site</a>.";
     $userMail = $mail;
     $userMail->addAddress($userdata[$this->userColumn]);
-    $userMail->send();
+    $user = $userMail->send();
+    if($user)
+    {
+        $ret["user_confirm_sent"] = true;
+    }
+    else
+    {
+        $ret["user_confirm_sent"] = false;
+        $ret["error"] .= " User: " . $userMail->ErrorInfo;
+    }
     # Send out an email to admins saying that they've been authorized.
     $query = "SELECT `".$this->userColumn."` FROM ".$this->getTable()." WHERE `admin_flag`=TRUE";
     $r = mysqli_query($l,$query);
@@ -2325,7 +2365,7 @@ class UserFunctions extends DBHelper
     else
       {
         $ret['admin_confirm_sent'] = false;
-        $ret['error'] = $mail->ErrorInfo;
+        $ret['error'] .= " Admin: " . $mail->ErrorInfo;
       }
     return $ret;
 
