@@ -5,9 +5,9 @@ if(!class_exists("DBHelper"))
     require_once(dirname(__FILE__)."/db/DBHelper.php");
   }
 if(!class_exists("Stronghash"))
-{
+  {
     require_once(dirname(__FILE__)."/stronghash/php-stronghash.php");
-}
+  }
 if(!class_exists("Xml"))
   {
     require_once(dirname(__FILE__)."/xml/xml.php");
@@ -116,8 +116,7 @@ if(!function_exists('smart_decode64'))
        * if it's a JSON, and sanitize the elements in any case.
        */
       if(is_null($data)) return null; // in case emptyness of data is meaningful
-      #$r = urldecode(base64_decode($data));
-      $r = base64_decode(urldecode($data));
+      $r = urldecode(base64_decode($data));
       if($r===false) return false;
       $jd=json_decode($r,true);
       $working= is_null($jd) ? $r:$jd;
@@ -128,12 +127,7 @@ if(!function_exists('smart_decode64'))
               // clean
               if(is_array($working))
                 {
-                  foreach($working as $k=>$v)
-                    {
-                      $ck=DBHelper::staticSanitize($k);
-                      $cv=DBHelper::staticSanitize($v);
-                      $prepped_data[$ck]=$cv;
-                    }
+                  $prepped_data = loopSanitizeArray($working);
                 }
               else $prepped_data=DBHelper::staticSanitize($working);
             }
@@ -146,7 +140,27 @@ if(!function_exists('smart_decode64'))
       else $prepped_data=$working;
       return $prepped_data;
     }
+
+function loopSanitizeArray($array) {
+    if(is_array($array)) {
+        $new_array = array();
+        foreach($array as $k=>$v) {
+            $ck = DBHelper::staticSanitize($k);
+            if(is_array($v)) {
+                $cv = loopSanitizeArray($v);
+            } else {
+                $cv = DBHelper::staticSanitize($v);
+            }
+            $new_array[$ck] = $cv;
+        }
+    } else {
+        $new_array = $array;
+    }
+    return $new_array;
   }
+
+
+}
 
 if(!function_exists('strbool'))
   {
