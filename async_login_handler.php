@@ -122,7 +122,7 @@ function getLoginState($get,$default=false)
   $s=$get['secret'];
   $id=$get['dblink'];
   $u=new UserFunctions();
-  return array("status"=>$u->validateUser($id,$conf,$s),'defaulted'=>$default,"login_url"=>$login_url);
+  return array("status"=>$u->validateUser($id,$conf,$s),'defaulted'=>$default,"login_url"=>$login_url,"detail"=>$u->validateUser($id,$conf,$s,true));
 }
 
 function hasTOTP($get)
@@ -363,7 +363,7 @@ function getFromUser($get) {
           require_once(dirname(__FILE__).'/CONFIG.php');
           global $default_user_database,$default_user_table;
           $col=decode64($get['col']);
-          $l=openDB($default_user_database);
+          $l=$u->openDB($default_user_database);
           $query="SELECT $col FROM `$default_user_table` WHERE dblink='$id'";
           $r=mysqli_query($l,$query);
           $row=mysqli_fetch_row($r);

@@ -1,4 +1,4 @@
-var animateLoad, apiUri, byteCount, checkMatchPassword, checkPasswordLive, delay, doAsyncCreate, doAsyncLogin, doEmailCheck, doRemoveAccountAction, doTOTPRemove, doTOTPSubmit, evalRequirements, finishPasswordResetHandler, giveAltVerificationOptions, isBlank, isBool, isEmpty, isJson, isNull, isNumber, loadJS, makeTOTP, mapNewWindows, noSubmit, popupSecret, removeAccount, resetPassword, root, roundNumber, saveTOTP, showAdvancedOptions, showInstructions, stopLoad, stopLoadError, toFloat, toInt, toggleNewUserSubmit, uri, verifyPhone, _base, _base1,
+var animateLoad, apiUri, byteCount, checkMatchPassword, checkPasswordLive, delay, doAsyncCreate, doAsyncLogin, doEmailCheck, doRemoveAccountAction, doTOTPRemove, doTOTPSubmit, evalRequirements, finishPasswordResetHandler, giveAltVerificationOptions, isBlank, isBool, isEmpty, isJson, isNull, isNumber, loadJS, makeTOTP, mapNewWindows, noSubmit, popupSecret, removeAccount, resetPassword, root, roundNumber, saveTOTP, showAdvancedOptions, showInstructions, stopLoad, stopLoadError, toFloat, toInt, toggleNewUserSubmit, verifyPhone, _base, _base1,
   __slice = [].slice;
 
 root = typeof exports !== "undefined" && exports !== null ? exports : this;
@@ -411,7 +411,19 @@ $(function() {
   }
 });
 
-delete url;
+if (typeof apiUri !== "object") {
+  apiUri = new Object();
+}
+
+apiUri.o = $.url();
+
+apiUri.urlString = window.location.origin + "/" + totpParams.subdirectory;
+
+apiUri.query = apiUri.o.attr("fragment");
+
+apiUri.targetApi = "async_login_handler.php";
+
+apiUri.apiTarget = apiUri.urlString + apiUri.targetApi;
 
 if (typeof window.passwords !== 'object') {
   window.passwords = new Object();
@@ -436,8 +448,7 @@ if (typeof window.totpParams !== 'object') {
 window.totpParams.popClass = "pop-panel";
 
 if (window.totpParams.home == null) {
-  uri = $.url();
-  window.totpParams.home = uri.attr('protocol') + '://' + uri.attr('host') + '/';
+  window.totpParams.home = apiUri.o.attr('protocol') + '://' + apiUri.o.attr('host') + '/';
 }
 
 if (window.totpParams.relative == null) {
@@ -453,18 +464,6 @@ window.totpParams.mainStylesheetPath = window.totpParams.relative + "css/otp_sty
 window.totpParams.popStylesheetPath = window.totpParams.relative + "css/otp_panels.css";
 
 window.totpParams.combinedStylesheetPath = window.totpParams.relative + "css/otp.min.css";
-
-apiUri = new Object();
-
-apiUri.o = $.url();
-
-apiUri.urlString = window.location.origin + "/" + totpParams.subdirectory;
-
-apiUri.query = uri.o.attr("fragment");
-
-apiUri.targetApi = "async_login_handler.php";
-
-apiUri.apiTarget = apiUri.urlString + apiUri.targetApi;
 
 delete url;
 
@@ -1351,7 +1350,27 @@ $(function() {
     return false;
   });
   try {
-    loadJS("http://ssarherps.org/cndb/bower_components/bootstrap/dist/js/bootstrap.min.js", function() {
+    if ($.url().param("showhelp") != null) {
+      showInstructions();
+    }
+    if ($.url().param("q") != null) {
+      $("#goals").addClass("hide");
+      $("#goals-list").addClass("hide");
+    }
+  } catch (_error) {
+    e = _error;
+    delay(300, function() {
+      if ($.url().param("showhelp") != null) {
+        return showInstructions();
+      }
+    });
+    if ($.url().param("q") != null) {
+      $("#goals").addClass("hide");
+      $("#goals-list").addClass("hide");
+    }
+  }
+  try {
+    loadJS("bower_components/bootstrap/dist/js/bootstrap.min.js", function() {
       $(".do-password-reset").unbind();
       $("#reset-password-icon").tooltip();
       $(".do-password-reset").click(function() {

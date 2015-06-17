@@ -1,5 +1,13 @@
 # Login functions
-delete url
+
+unless typeof apiUri is "object"
+  apiUri = new Object()
+apiUri.o = $.url()
+# Why window.location? In case there's a domain in a url key
+apiUri.urlString = window.location.origin  + "/" + totpParams.subdirectory
+apiUri.query = apiUri.o.attr("fragment")
+apiUri.targetApi = "async_login_handler.php"
+apiUri.apiTarget = apiUri.urlString + apiUri.targetApi
 
 if typeof window.passwords isnt 'object' then window.passwords = new Object()
 window.passwords.goodbg = "#cae682"
@@ -13,8 +21,7 @@ if typeof window.totpParams isnt 'object' then window.totpParams = new Object()
 window.totpParams.popClass = "pop-panel"
 # The value $redirect_url in CONFIG.php overrides this value
 if not window.totpParams.home?
-  uri = $.url()
-  window.totpParams.home =  uri.attr('protocol') + '://' + uri.attr('host') + '/'
+  window.totpParams.home =  apiUri.o.attr('protocol') + '://' + apiUri.o.attr('host') + '/'
 if not window.totpParams.relative?
   window.totpParams.relative = ""
 if not window.totpParams.subdirectory?
@@ -23,13 +30,7 @@ window.totpParams.mainStylesheetPath = window.totpParams.relative+"css/otp_style
 window.totpParams.popStylesheetPath = window.totpParams.relative+"css/otp_panels.css"
 window.totpParams.combinedStylesheetPath = window.totpParams.relative+"css/otp.min.css"
 
-apiUri = new Object()
-apiUri.o = $.url()
-# Why window.location? In case there's a domain in a url key
-apiUri.urlString = window.location.origin  + "/" + totpParams.subdirectory
-apiUri.query = uri.o.attr("fragment")
-apiUri.targetApi = "async_login_handler.php"
-apiUri.apiTarget = apiUri.urlString + apiUri.targetApi
+
 
 delete url
 
@@ -950,14 +951,31 @@ $ ->
     resetPassword()
     false
   try
-    loadJS "http://ssarherps.org/cndb/bower_components/bootstrap/dist/js/bootstrap.min.js", ->
+    if $.url().param("showhelp")? then showInstructions()
+    if $.url().param("q")?
+      $("#goals").addClass("hide")
+      $("#goals-list").addClass("hide")
+  catch e
+    delay 300, ->
+      if $.url().param("showhelp")? then showInstructions()
+    if $.url().param("q")?
+      $("#goals").addClass("hide")
+      $("#goals-list").addClass("hide")
+  try
+    loadJS "bower_components/bootstrap/dist/js/bootstrap.min.js", ->
       $(".do-password-reset").unbind()
-      $("#reset-password-icon").tooltip()
+      try
+        $("#reset-password-icon").tooltip()
+      catch e
+        console.warn("Couldn't tooltip the forgotten password icon!")
       $(".do-password-reset")
       .click ->
         resetPassword()
         false
-      $(".alert").alert()
+      try
+        $(".alert").alert()
+      catch e
+        console.warn("Couldn't bind alert!")
   catch e
     console.log("Couldn't tooltip icon!")
   try
