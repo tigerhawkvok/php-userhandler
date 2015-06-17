@@ -82,7 +82,7 @@ debounce: (func, threshold = 300, execAsap = false) ->
     else if (execAsap)
       func.apply(obj, args)
     window.debounce_timer = setTimeout(delayed, threshold)
-    
+
 Function::debounce = (threshold = 300, execAsap = false, timeout = window.debounce_timer, args...) ->
   # Borrowed from http://coffeescriptcookbook.com/chapters/functions/debounce
   # Only run the prototyped function once per interval.
@@ -99,7 +99,72 @@ Function::debounce = (threshold = 300, execAsap = false, timeout = window.deboun
     func.apply(obj, args)
     console.log("Executed immediately")
   window.debounce_timer = setTimeout(delayed, threshold)
-    
+
+
+loadJS = (src, callback = new Object(), doCallbackOnError = true) ->
+  ###
+  # Load a new javascript file
+  #
+  # If it's already been loaded, jump straight to the callback
+  #
+  # @param string src The source URL of the file
+  # @param function callback Function to execute after the script has
+  #                          been loaded
+  # @param bool doCallbackOnError Should the callback be executed if
+  #                               loading the script produces an error?
+  ###
+  if $("script[src='#{src}']").exists()
+    if typeof callback is "function"
+      try
+        callback()
+      catch e
+        console.error "Script is already loaded, but there was an error executing the callback function - #{e.message}"
+    # Whether or not there was a callback, end the script
+    return true
+  # Create a new DOM selement
+  s = document.createElement("script")
+  # Set all the attributes. We can be a bit redundant about this
+  s.setAttribute("src",src)
+  s.setAttribute("async","async")
+  s.setAttribute("type","text/javascript")
+  s.src = src
+  s.async = true
+  # Onload function
+  onLoadFunction = ->
+    state = s.readyState
+    try
+      if not callback.done and (not state or /loaded|complete/.test(state))
+        callback.done = true
+        if typeof callback is "function"
+          try
+            callback()
+          catch e
+            console.error "Postload callback error - #{e.message}"
+    catch e
+      console.error "Onload error - #{e.message}"
+  # Error function
+  errorFunction = ->
+    console.warn "There may have been a problem loading #{src}"
+    try
+      unless callback.done
+        callback.done = true
+        if typeof callback is "function" and doCallbackOnError
+          try
+            callback()
+          catch e
+            console.error "Post error callback error - #{e.message}"
+    catch e
+      console.error "There was an error in the error handler! #{e.message}"
+  # Set the attributes
+  s.setAttribute("onload",onLoadFunction)
+  s.setAttribute("onreadystate",onLoadFunction)
+  s.setAttribute("onerror",errorFunction)
+  s.onload = s.onreadystate = onLoadFunction
+  s.onerror = errorFunction
+  document.getElementsByTagName('head')[0].appendChild(s)
+  true
+
+
 mapNewWindows = ->
   # Do new windows
   $(".newwindow").each ->
@@ -195,9 +260,9 @@ $ ->
       loadLast()
   catch e
     console.warn("There was an error calling loadLast(). This may result in unexpected behaviour.")
-    
 
 # Login functions
+delete url
 
 if typeof window.passwords isnt 'object' then window.passwords = new Object()
 window.passwords.goodbg = "#cae682"
@@ -211,8 +276,8 @@ if typeof window.totpParams isnt 'object' then window.totpParams = new Object()
 window.totpParams.popClass = "pop-panel"
 # The value $redirect_url in CONFIG.php overrides this value
 if not window.totpParams.home?
-  url = $.url()
-  window.totpParams.home =  url.attr('protocol') + '://' + url.attr('host') + '/'
+  uri = $.url()
+  window.totpParams.home =  uri.attr('protocol') + '://' + uri.attr('host') + '/'
 if not window.totpParams.relative?
   window.totpParams.relative = ""
 if not window.totpParams.subdirectory?
@@ -220,6 +285,16 @@ if not window.totpParams.subdirectory?
 window.totpParams.mainStylesheetPath = window.totpParams.relative+"css/otp_styles.css"
 window.totpParams.popStylesheetPath = window.totpParams.relative+"css/otp_panels.css"
 window.totpParams.combinedStylesheetPath = window.totpParams.relative+"css/otp.min.css"
+
+apiUri = new Object()
+apiUri.o = $.url()
+# Why window.location? In case there's a domain in a url key
+apiUri.urlString = window.location.origin  + "/" + totpParams.subdirectory
+apiUri.query = uri.o.attr("fragment")
+apiUri.targetApi = "async_login_handler.php"
+apiUri.apiTarget = apiUri.urlString + apiUri.targetApi
+
+delete url
 
 checkPasswordLive = (selector = "#createUser_submit") ->
   pass = $("#password").val()
@@ -320,9 +395,9 @@ doTOTPSubmit = (home = window.totpParams.home) ->
   ip = $("#remote").val()
   url = $.url()
   ajaxLanding = "async_login_handler.php"
-  urlString = url.attr('protocol') + '://' + url.attr('host') + '/' + window.totpParams.subdirectory + ajaxLanding
+  apiUrlString = url.attr('protocol') + '://' + url.attr('host') + '/' + window.totpParams.subdirectory + ajaxLanding
   args = "action=verifytotp&code=#{code}&user=#{user}&password=#{pass}&remote=#{ip}"
-  totp = $.post(urlString ,args,'json')
+  totp = $.post(apiUrlString ,args,'json')
   totp.done (result) ->
     # Check the result
     if result.status is true
@@ -360,7 +435,7 @@ doTOTPSubmit = (home = window.totpParams.home) ->
     $("#totp_message")
     .text("Failed to contact server. Please try again.")
     .addClass("error")
-    console.error("AJAX failure",urlString  + "?" + args,result,status)
+    console.error("AJAX failure",apiUrlString  + "?" + args,result,status)
     stopLoadError()
 
 doTOTPRemove = ->
@@ -372,9 +447,9 @@ doTOTPRemove = ->
   code = $("#code").val()
   url = $.url()
   ajaxLanding = "async_login_handler.php"
-  urlString = url.attr('protocol') + '://' + url.attr('host') + '/' + window.totpParams.subdirectory + ajaxLanding
+  apiUrlString = url.attr('protocol') + '://' + url.attr('host') + '/' + window.totpParams.subdirectory + ajaxLanding
   args = "action=removetotp&code=#{code}&username=#{user}&password=#{pass}&base64=true"
-  remove_totp = $.post(urlString,args,'json')
+  remove_totp = $.post(apiUrlString,args,'json')
   remove_totp.done (result) ->
     # Check the result
     unless result.status is true
@@ -382,7 +457,7 @@ doTOTPRemove = ->
       .text(result.human_error)
       .addClass("error")
       console.error(result.error)
-      console.warn("#{urlString}?#{args}")
+      console.warn("#{apiUrlString}?#{args}")
       console.warn(result)
       stopLoadError()
       return false
@@ -392,7 +467,7 @@ doTOTPRemove = ->
     .addClass('good')
     .text("Two-factor authentication removed for #{result.username}.")
     $("#totp_remove").remove()
-    console.log(urlString + "?" + args);
+    console.log(apiUrlString + "?" + args);
     console.log(result)
     stopLoad()
     return false
@@ -401,7 +476,7 @@ doTOTPRemove = ->
     $("#totp_message")
     .text("Failed to contact server. Please try again.")
     .addClass("error")
-    console.error("AJAX failure",urlString  + "?" + args,result,status)
+    console.error("AJAX failure",apiUrlString  + "?" + args,result,status)
     stopLoadError()
 
 makeTOTP = ->
@@ -415,9 +490,9 @@ makeTOTP = ->
   key = $("#secret").val()
   url = $.url()
   ajaxLanding = "async_login_handler.php"
-  urlString = url.attr('protocol') + '://' + url.attr('host') + '/' + window.totpParams.subdirectory + ajaxLanding
+  apiUrlString = url.attr('protocol') + '://' + url.attr('host') + '/' + window.totpParams.subdirectory + ajaxLanding
   args = "action=maketotp&password=#{password}&user=#{user}"
-  totp = $.post(urlString,args,'json')
+  totp = $.post(apiUrlString,args,'json')
   totp.done (result) ->
     # Yay! Replace the form ....
     if result.status is true
@@ -466,7 +541,7 @@ makeTOTP = ->
         saveTOTP(key,hash)
       stopLoad()
     else
-      console.error("Couldn't generate TOTP code",urlString  + "?" + args)
+      console.error("Couldn't generate TOTP code",apiUrlString  + "?" + args)
       console.warn(result)
       $("#totp_message")
       .text("There was an error generating your code. #{result.message}")
@@ -476,7 +551,7 @@ makeTOTP = ->
     $("#totp_message")
     .text("Failed to contact server. Please try again.")
     .addClass("error")
-    console.error("AJAX failure",urlString  + "?" + args,result,status)
+    console.error("AJAX failure",apiUrlString  + "?" + args,result,status)
     stopLoadError()
   return false
 
@@ -489,9 +564,9 @@ saveTOTP = (key,hash) ->
   user = $("#username").val()
   url = $.url()
   ajaxLanding = "async_login_handler.php"
-  urlString = url.attr('protocol') + '://' + url.attr('host') + '/' + window.totpParams.subdirectory + ajaxLanding
+  apiUrlString = url.attr('protocol') + '://' + url.attr('host') + '/' + window.totpParams.subdirectory + ajaxLanding
   args = "action=savetotp&secret=#{key}&user=#{user}&hash=#{hash}&code=#{code}"
-  totp = $.post(urlString ,args,'json')
+  totp = $.post(apiUrlString ,args,'json')
   totp.done (result) ->
     # We're done!
     if result.status is true
@@ -533,7 +608,7 @@ giveAltVerificationOptions = ->
   # Put up an overlay, and ask if the user wants to remove 2FA or get a text
   url = $.url()
   ajaxLanding = "async_login_handler.php"
-  urlString = url.attr('protocol') + '://' + url.attr('host') + '/' + window.totpParams.subdirectory + ajaxLanding
+  apiUrlString = url.attr('protocol') + '://' + url.attr('host') + '/' + window.totpParams.subdirectory + ajaxLanding
   user = $("#username").val()
   args = "action=cansms&user=#{user}"
   remove_id = "remove_totp_link"
@@ -550,12 +625,12 @@ giveAltVerificationOptions = ->
   messages.remove = "<a href='#' id='#{remove_id}' role='button' class='btn btn-default'>Remove two-factor authentication</a>"
   # First see if the user can SMS at all before populating the message options
 
-  sms = $.get(urlString,args,'json')
+  sms = $.get(apiUrlString,args,'json')
   sms.done (result) ->
     if result[0] is true
       messages.sms = "<a href='#' id='#{sms_id}' role='button' class='btn btn-default'>Send SMS</a>"
     else
-      console.warn("Couldn't get a valid result",result,urlString+"?"+args)
+      console.warn("Couldn't get a valid result",result,apiUrlString+"?"+args)
     pop_content = ""
     $.each messages,(k,v) ->
       pop_content += v
@@ -566,8 +641,8 @@ giveAltVerificationOptions = ->
     $("##{sms_id}").click ->
       # Attempt to send the TOTP
       args = "action=sendtotptext&user=#{user}"
-      sms_totp = $.get(urlString,args,'json')
-      console.log("Sending message ...",urlString+"?"+args)
+      sms_totp = $.get(apiUrlString,args,'json')
+      console.log("Sending message ...",apiUrlString+"?"+args)
       sms_totp.done (result) ->
         if result.status is true
           # Remove the pane and replace totp_message
@@ -580,7 +655,7 @@ giveAltVerificationOptions = ->
           .text(result.human_error)
           console.error(result.error)
       sms_totp.fail (result,status) ->
-        console.error("AJAX failure trying to send TOTP text",urlString + "?" + args)
+        console.error("AJAX failure trying to send TOTP text",apiUrlString + "?" + args)
         console.error("Returns:",result,status)
   sms.fail (result,status) ->
     # Just don't populate the thing
@@ -601,11 +676,11 @@ verifyPhone = ->
   # Verify phone auth status
   url = $.url()
   ajaxLanding = "async_login_handler.php"
-  urlString = url.attr('protocol') + '://' + url.attr('host') + '/' + window.totpParams.subdirectory + ajaxLanding
+  apiUrlString = url.attr('protocol') + '://' + url.attr('host') + '/' + window.totpParams.subdirectory + ajaxLanding
   auth = if $("#phone_auth").val()? then $("#phone_auth").val() else null
   user = $("#username").val()
   args = "action=verifyphone&username=#{user}&auth=#{auth}"
-  verifyPhoneAjax = $.get(urlString,args,'json')
+  verifyPhoneAjax = $.get(apiUrlString,args,'json')
   verifyPhoneAjax.done (result) ->
     if result.status is false
       # If key "is_good" isn't true, display the error
@@ -649,12 +724,12 @@ verifyPhone = ->
           window.location.href = window.totpParams.home
     else
       # Something broke
-      console.warn("Unexpected condition encountered verifying the phone number",urlString)
+      console.warn("Unexpected condition encountered verifying the phone number",apiUrlString)
       console.log(result)
       return false
   verifyPhoneAjax.fail (result,status) ->
     # Update a status message
-    console.error("AJAX failure trying to send phone verification text",urlString + "?" + args)
+    console.error("AJAX failure trying to send phone verification text",apiUrlString + "?" + args)
     console.error("Returns:",result,status)
 
 showInstructions = (path = "help/instructions_pop.html") ->
@@ -719,12 +794,12 @@ doRemoveAccountAction = ->
   animateLoad()
   url = $.url()
   ajaxLanding = "async_login_handler.php"
-  urlString = url.attr('protocol') + '://' + url.attr('host') + '/' + window.totpParams.subdirectory + ajaxLanding
+  apiUrlString = url.attr('protocol') + '://' + url.attr('host') + '/' + window.totpParams.subdirectory + ajaxLanding
   username = $("#username").val()
   password = $("#password").val()
   code = if $("#code").exists() then $("#code").val() else false
   args = "action=removeaccount&username=#{username}&password=#{password}&code=#{code}"
-  $.post(urlString,args,'json')
+  $.post(apiUrlString,args,'json')
   .done (result) ->
     if result.status is true
       $("#remove_message").text("Your account has been successfully deleted.")
@@ -737,14 +812,14 @@ doRemoveAccountAction = ->
     else
       $("#remove_message").text("There was an error removing your account. Please try again.")
       console.error("Got an error-result: ",result.error)
-      console.warn(urlString + "?" + args,result)
+      console.warn(apiUrlString + "?" + args,result)
       stopLoadError()
   .fail (result,status) ->
     $("#remove_message")
     .text(result.error)
     .addClass("error")
     $("totp_code").val("")
-    console.error("Ajax Failure",urlString + "?" + args,result,status)
+    console.error("Ajax Failure",apiUrlString + "?" + args,result,status)
     stopLoadError()
 
 
@@ -755,9 +830,9 @@ noSubmit = ->
 doAsyncLogin = (uri = "async_login_handler.php", respectRelativePath = true) ->
   noSubmit()
   if respectRelativePath
-    urlString = url.attr('protocol') + '://' + url.attr('host') + '/' + window.totpParams.subdirectory + uri
+    apiUrlString = url.attr('protocol') + '://' + url.attr('host') + '/' + window.totpParams.subdirectory + uri
   else
-    urlString = uri
+    apiUrlString = uri
   username = $("#username").val()
   password = $("#password").val()
   pass64 = Base64.encodeURI(password)
@@ -784,135 +859,295 @@ resetPassword = ->
   # Remove the password field and replace the login button, rebind
   # events
   $("#password").remove()
-  $("#login_button").remove()
-  html = "<button id='login_button' class='btn btn-danger'>Check User</button>"
+  $("label[for='password']").remove()
+  $("#reset-password-icon").remove()
+  $(".alert").remove()
+  $("#form_create_new_account").remove()
+  $(".tooltip").remove()
   pane_messages = "reset-user-messages"
-  $("#login").before("<div id='#{pane_messages}'")
-  $("#login").append(html)
+  unless $("##{pane_messages}").exists()
+    $("#login").before("<div id='#{pane_messages}'></div>")
   $("##{pane_messages}")
-  .addClass("bg-warning")
+  .removeClass("alert-danger alert-info")
+  .addClass("alert alert-warning")
   .text("Once your password has been reset, your old password will be invalid.")
-  resetFormSubmit = ->
-    url = $.url()
-    ajaxLanding = "async_login_handler.php"
-    urlString = url.attr('protocol') + '://' + url.attr('host') + '/' + window.totpParams.subdirectory + ajaxLanding
-    user = $("#username").val()
-    args = "action=resetpass&username=#{user}"
-    multiOptionBinding = (pargs = args) ->
-      $(".reset-pass-button").click ->
-        method = $(this).attr("data-method")
-        pargs = "#{pargs}&method=#{method}"
-        # Check it!
-        $.post(urlString,pargs,"json")
-        .done (result) ->
-          if result.status is false
-            $("##{pane_messages}")
-            .removeClass("bg-warning bg-primary")
-            .addClass("bg-danger")
-            .text("There was a problem resetting your password. Please try again")
-            # Console
-          else
-            $("##{pane_messages}")
-            .removeClass("bg-warning bg-danger")
-            .addClass("bg-primary")
-            .text("Check your #{method} for your new password. We strongly encourage you to change it!")
-          false
-        .fail (result,status) ->
-          false
-        false
+  url = $.url()
+  ajaxLanding = "async_login_handler.php"
+  apiUrlString = url.attr('protocol') + '://' + url.attr('host') + '/' + window.totpParams.subdirectory + ajaxLanding
+  checkButton = """
+  <button class="btn btn-warning" id="check-login">Start Reset</button>
+  """
+
+  $("#login_button").replaceWith(checkButton)
+  # Set up the bindings
+  args = "action=startpasswordreset"
+  multiOptionBinding = (pargs = args) ->
+    $(".reset-pass-button")
+    .unbind()
+    .click ->
+      totpValue = $("#totp").val()
+      if totpValue?
+        pargs += "&totp=#{totpValue}"
+      method = $(this).attr("data-method")
+      resetFormSubmit(pargs,method)
       false
-    $.get(urlString,args,"json")
+    false
+  # The wrapper function
+  resetFormSubmit = (args, method) ->
+    user = $("#username").val()
+    unless args?
+      args = "action=startpasswordreset&username=#{user}"
+    animateLoad()
+    $.get(apiUrlString,args,"json")
     .done (result) ->
       if result.status is false
         # Do stuff based on the action
+        if isNull(result.human_error)
+          # Make it REALLY not there, in case it's an empty string
+          result.human_error = undefined
+        console.log("Got requested action #{result.action}",result)
+        console.log("Requested","#{apiUrlString}?#{args}")
         $("#username").prop("disabled",true)
         switch result.action
           when "GET_TOTP"
             # Replace and rebind form to get the TOTP value
             # If the user canSMS, then present that as a button option
             usedSms = false
-            html = "<div id='start-reset-process'><button id='totp-submit' class='btn btn-primary'>Verify</button></div>"
-            $("#login").append(html)
+            html = """
+            <legend>Two-Factor Authentication</legend>
+            <p><code>#{user}</code> has two-factor authentication enabled.</p>
+            <div id='start-reset-process' class="totp">
+              <div class="form-group">
+                <label for="totp">Authentication Code:</label>
+                <input type="number" class="form-control" id="totp" name="totp"/>
+              </div>
+            </div>
+            <button class='reset-pass-button btn btn-danger' data-method='email'>
+              Verify By Email
+            </button>
+            """
             if result.canSMS
               sms_id = "reset-user-sms-totp"
-              text_html = "<button class='btn btn-default' id='#{sms_id}'>Text Code</button>"
-              $("#start-reset-process").append(text_html)
+              text_html = "<button class='btn btn-primary' id='#{sms_id}'>Text Code</button>"
+              $("#start-reset-process").after(text_html)
               $("##{sms_id}").click ->
                 # Attempt to send the TOTP
+                animateLoad()
                 smsArgs = "action=sendtotptext&user=#{user}"
-                sms_totp = $.get(urlString,smsArgs,'json')
-                console.log("Sending message ...",urlString+"?"+args)
+                sms_totp = $.get(apiUrlString,smsArgs,'json')
+                console.log("Sending message ...",apiUrlString+"?"+args)
                 sms_totp.done (result) ->
                   if result.status is true
                     # Alert the user
                     $("##{pane_messages}")
                     .text("Your code has been sent to your registered number.")
-                    .removeClass("bg-warning bg-danger")
-                    .addClass("bg-primary")
+                    .removeClass("alert-warning alert-danger")
+                    .addClass("alert-info")
                     usedSms = true
+                    newButton = """
+                    <button class="reset-pass-button btn btn-danger" data-method="email">
+                      Verify by SMS
+                    </button>
+                    """
+                    $("##{sms_id}").replaceWith(newButton)
+                    multiOptionBinding(args)
                   else
                     #Place a notice in pane_messages
                     $("##{pane_messages}")
-                    .addClass("bg-danger")
+                    .addClass("alert-danger")
                     .text(result.human_error)
                     console.error(result.error)
                 sms_totp.fail (result,status) ->
                   $("##{pane_messages}")
-                  .addClass("bg-danger")
+                  .addClass("alert-danger")
                   .text("There was a problem sending your text. Please try again.")
-                  console.error("AJAX failure trying to send TOTP text",urlString + "?" + args)
+                  console.error("AJAX failure trying to send TOTP text",apiUrlString + "?" + args)
                   console.error("Returns:",result,status)
-            doTotpSubmission = ->
-              totpValue = $("#totp").val()
-              args = "#{args}&totp=#{totpValue}"
-              # Now draw the thing
-              $("#start-reset-process").remove()
-              html = ""
-              if result.canSMS and usedSms isnt true
-                # Show an option to get a text reset password
-                html = "<button class='reset-pass-button btn btn-primary' data-method='text'>Text New Password</button>"
-                false
-              html = "#{html}<button class='reset-pass-button btn btn-primary' data-method='email'>Email New Password</button>"
-              $("#login").append(html)
-              multiOptionBinding(args)
-              false
-            $("#totp-submit").click ->
+                sms_totp.always ->
+                  stopLoad()
+            $("#login")
+            .replaceWith(html)
+            .unbind()
+            .submit ->
               noSubmit()
               doTotpSubmission()
-            $("#login-totp-form").submit ->
-              noSubmit()
-              doTotpSubmission()
+            multiOptionBinding(args)
+            return false
           when "NEED_METHOD"
             # Draw a button to send a text AND button to email
-            $("#login_button").remove()
-            html = "<button class='reset-pass-button btn btn-primary' data-method='text'>Text New Password</button>"
-            html = "#{html}<button class='reset-pass-button btn btn-primary' data-method='email'>Email New Password</button>"
-            $("#login").append(html)
-            multiOptionBinding()
-            false
+            html = "<p>Resetting password for <code>#{user}</code></p>"
+            if result.canSMS and usedSms isnt true
+              # Show an option to get a text reset password
+              html = "<button class='reset-pass-button btn btn-danger' data-method='sms'>Verify by SMS</button>"
+              false
+            html += """
+            <button class='reset-pass-button btn btn-danger' data-method='email'>
+              Verify by Email
+            </button>
+            """
+            $("#login").replaceWith(html)
+            multiOptionBinding(args)
+            return false
           when "BAD_USER"
             # Bad user
             $("##{pane_messages}")
-            .addClass("bg-danger")
+            .addClass("alert-danger")
             .text("Sorry, that user doesn't exist.")
             $("#username")
             .prop("disabled",false)
             .val("")
-            false
-      # Otherwise, it's good, and an email has been sent
-      $("##{pane_messages}")
-      .removeClass("bg-warning")
-      .addClass("bg-primary")
-      .text("Check your email for your new password. We strongly encourage you to change it!")
+            return false
+          else
+            text = result.human_error ? "There was a problem resetting your password. Please try again"
+            $("##{pane_messages}")
+            .addClass("alert-danger")
+            .removeClass("alert-info alert-warning")
+            .text(text)
+            console.error("Illegal state!")
+            console.warn(result)
+            return false
+      ## End all the bad results.
+      else
+        # Otherwise, it's good, and an email has been sent
+        console.log("Got a good result.")
+        console.log(result)
+        $(".form-group").remove()
+        doManualEntry = ->
+          # Initiating manual entry
+          altEntry = """
+          <legend>Verify Reset</legend>
+          <div class="form-group">
+            <label for="verify">Verification Token:</label>
+            <input type="text" class="form-control" id="verify" name="verify" />
+          </div>
+          <div class="form-group">
+            <label for="key">Key:</label>
+            <input type="text" class="form-control" id="key" name="key" />
+          </div>
+          <input type="hidden" id="username" name="username" value="#{user}" />
+          <button class="btn btn-success" id="verify-now">Verify Now</button>
+          """
+          $("#login")
+          .html(altEntry)
+          .unbind()
+          .submit ->
+            noSubmit()
+            finishPasswordResetHandler()
+          $("#verify-now").click ->
+            finishPasswordResetHandler()
+        # Method check
+        if method is "email" or not method?
+          $("##{pane_messages}")
+          .removeClass("alert-warning alert-danger")
+          .addClass("alert-info")
+          .text("Check your email for your reset link. Once you've clicked that, your password will be reset.")
+          altEntryButton = "<button class='btn btn-default' id='manual-input'>Manually Input Verification</button>"
+          $("#check-login").replaceWith(altEntryButton)
+          $("#manual-input").click ->
+            doManualEntry()
+        if method is "sms"
+          doManualEntry()
+      stopLoad()
       false
     .fail (result,status) ->
+      stopLoadError()
+      $("##{pane_messages}")
+      .removeClass("alert-info alert-warning")
+      .addClass("alert-danger")
+      .text("We couldn't process the password reset. Please try again.")
       false
-  $("#login_button").click ->
+  # End the major wrpaper function
+  # Bind the clicks
+  $("#login")
+  .unbind()
+  .submit ->
     noSubmit()
     resetFormSubmit()
-  $("#login").submit ->
+  $("#check-login")
+  .unbind()
+  .click ->
     noSubmit()
     resetFormSubmit()
+
+
+finishPasswordResetHandler = ->
+  ###
+  # Read the URL params, then do the async call
+  #
+  #
+  ###
+  verify = ""
+  key = ""
+  if $("input#verify").exists()
+    verify = $("input#verify").val().trim()
+    key = $("input#key").val().trim()
+    username = $("input#username").val()
+  else
+    # Check the globals
+    verify = window.resetParams.verify
+    key = window.resetParams.key
+    username = window.resetParams.user
+    if isNull(verify)
+      # Last-ditch -- if one isn't there, none are
+      verify = $.url().param("verify")
+      key = $.url().param("key")
+      username = $.url().param("user")
+    html = """
+    <h1>Password Reset Confirmation</h1>
+    <div id='login'></div>
+    """
+    $("body").append(html)
+  if isNull(verify) or isNull(key)
+    if $(".alert").exists()
+      $(".alert").remove()
+    html = """
+    <div class="alert alert-danger">
+      <button type="button" class="close" data-dismiss="alert" aria-label="Close"><span aria-hidden="true">&times;</span></button>
+      <strong>Yikes!</strong> We need both the verification token and key to continue resetting your password.
+    </div>
+    """
+    $("#login").before(html)
+    $(".alert").alert()
+    return false
+  # We have what we need, post it
+  args = "action=finishpasswordreset&key=#{key}&verify=#{verify}&username=#{username}"
+  $.post(apiUri.apiTarget, args, "json")
+  .done (result) ->
+    unless result.status
+      if $(".alert").exists()
+        $(".alert").remove()
+      html = """
+      <div class="alert alert-danger">
+        <button type="button" class="close" data-dismiss="alert" aria-label="Close"><span aria-hidden="true">&times;</span></button>
+        <strong>There was a problem resetting your password.</strong> #{result.human_error}
+      </div>
+      """
+      $("#login").before(html)
+      $(".alert").alert()
+      return false
+    # It worked! Show them the new password.
+    html = """
+    <div class="alert alert-success">
+      <button type="button" class="close" data-dismiss="alert" aria-label="Close"><span aria-hidden="true">&times;</span></button>
+      <strong>Your password has been successfully reset</strong> Your new password is <strong>#{result.new_password}</strong>. Write this down! You will NOT be able to generate or see this password again.
+    </div>
+    """
+    $("#login").replaceWith(html)
+    $(".alert").alert()
+    false
+  .fail (result) ->
+    html = """
+    <div class="alert alert-danger">
+      <button type="button" class="close" data-dismiss="alert" aria-label="Close"><span aria-hidden="true">&times;</span></button>
+      <strong>Yikes!</strong> We had a problem checking the server. Try again later.
+    </div>
+    """
+    $("#login").before(html)
+    $(".alert").alert()
+    console.error("Couldn't communicate with server! Tried to contact","#{apiUri.apiTarget}?#{args}")
+    false
+  false
+
 
 
 $ ->
@@ -974,11 +1209,30 @@ $ ->
     domain = $(this).attr('data-domain')
     has2fa = if $(this).attr("data-user-tfa") is 'true' then true else false
     showAdvancedOptions(domain,has2fa)
+  $(".do-password-reset").click ->
+    resetPassword()
+    false
+  try
+    loadJS "http://ssarherps.org/cndb/bower_components/bootstrap/dist/js/bootstrap.min.js", ->
+      $(".do-password-reset").unbind()
+      $("#reset-password-icon").tooltip()
+      $(".do-password-reset")
+      .click ->
+        resetPassword()
+        false
+      $(".alert").alert()
+  catch e
+    console.log("Couldn't tooltip icon!")
   try
     if $.url().param("showhelp")? then showInstructions()
   catch e
     delay 300, ->
       if $.url().param("showhelp")? then showInstructions()
+  try
+    if window.checkPasswordReset is true
+      finishPasswordResetHandler()
+  catch e
+    console.error("Couldn't check password reset state! #{e.message}")
   $("#next.continue").click ->
     window.location.href = window.totpParams.home
   # Load stylesheets

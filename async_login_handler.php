@@ -7,16 +7,52 @@ require_once(dirname(__FILE__).'/core/core.php');
 require_once(dirname(__FILE__).'/handlers/login_functions.php');
 #require_once(dirname(__FILE__).'/handlers/db_hook.inc');
 
+$start_script_timer = microtime_float();
+
+if(!function_exists('elapsed'))
+{
+  function elapsed($start_time = null)
+  {
+    /***
+     * Return the duration since the start time in
+     * milliseconds.
+     * If no start time is provided, it'll try to use the global
+     * variable $start_script_timer
+     *
+     * @param float $start_time in unix epoch. See http://us1.php.net/microtime
+     ***/
+
+    if(!is_numeric($start_time))
+    {
+      global $start_script_timer;
+      if(is_numeric($start_script_timer)) $start_time = $start_script_timer;
+      else return false;
+    }
+    return 1000*(microtime_float() - (float)$start_time);
+  }
+}
+
 function returnAjax($data)
 {
   if(!is_array($data)) $data=array($data);
+  $data["execution_time"] = elapsed();
+  $data["completed"] = microtime_float();
+  global $do;
+  $data["requested_action"] = $do;
+  $data["args_provided"] = $_REQUEST;
+  if(!isset($data["status"])) {
+    $data["status"] = false;
+    $data["error"] = "Server returned null or otherwise no status.";
+    $data["human_error"] = "Server didn't respond correctly. Please try again.";
+    $data["app_error_code"] = -10;
+  }
   header('Cache-Control: no-cache, must-revalidate');
   header('Expires: Mon, 26 Jul 1997 05:00:00 GMT');
   header('Content-type: application/json');
   global $billingTokens;
   if(is_array($billingTokens))
   {
-    $data["billing_meta"] = $billingTokens;
+      $data["billing_meta"] = $billingTokens;
   }
   print @json_encode($data,JSON_FORCE_OBJECT);
   exit();
@@ -65,6 +101,15 @@ if($print_login_state === true)
       case "removeaccount":
         returnAjax(removeAccount($_REQUEST));
         break;
+      case "verifynewuser":
+        returnAjax(verifyUserAuth($_REQUEST));
+        break;
+      case "startpasswordreset":
+        returnAjax(doStartResetPassword($_REQUEST));
+        break;
+      case "finishpasswordreset":
+        returnAjax(finishResetPassword($_REQUEST));
+        break;
       default:
         returnAjax(getLoginState($_REQUEST,true));
       }
@@ -101,11 +146,11 @@ function canSMS($get)
   try
     {
       # This should be non-strict
-      return $u->canSMS(false);
+        return array("status"=>$u->canSMS(false));
     }
   catch(Exception $e)
     {
-      return false;
+        return array("status"=>false,"error"=>$e->getMessage());
     }
 }
 
@@ -133,6 +178,7 @@ function generateTOTPForm($get)
   $r = $u->makeTOTP($domain);
 
   # Whether or not it fails, return $r
+
   return $r;
 }
 
@@ -328,6 +374,14 @@ function getFromUser($get) {
   return array('status'=>false,'error'=>"One or more required fields were left blank");
 }
 
+function verifyUserAuth($get) {
+  $token = $get['token'];
+  $userToActivate = $get['user'];
+  $encoded_key = $get['key'];
+  $user = new UserFunctions();
+  return $user->verifyUserAuth($encoded_key,$token,$userToActivate);
+}
+
 function getProfileImage($profile) {
     $u = new UserFunctions();
     return array("status"=>true,"img"=>$u->getUserPicture($profile));
@@ -354,7 +408,29 @@ function setNewProfileImage($get) {
         "userid" => $id,
         "provided"=>$get
     );
-return array('status'=>false,'error'=>"One or more required fields were left blank","human_error"=>"There was a problem communicating with the server","app_error_code"=>107,"details"=>$emptyState);
+    return array('status'=>false,'error'=>"One or more required fields were left blank","human_error"=>"There was a problem communicating with the server","app_error_code"=>107,"details"=>$emptyState);
+}
+
+function doStartResetPassword($get) {
+  $u = new UserFunctions($get["username"]);
+  return $u->resetUserPassword($get["method"]);
+}
+
+function finishResetPassword($get) {
+  $u = new UserFunctions($get["username"]);
+  $passwordBlob = array(
+    "key"=>$get["key"],
+    "verify"=>$get["verify"],
+    "user"=>$get["username"],
+    "email_password" => $get["email_password"]
+  );
+  try {
+      $ret = $u->doUpdatePassword($passwordBlob,true);
+  }
+  catch (Exception $e) {
+      $ret = array("status"=>false,"error"=>$e->getMessage(),"human_error"=>"There was a server problem validating the reset. Please try again.");
+  }
+  return $ret;
 }
 
 ?>
