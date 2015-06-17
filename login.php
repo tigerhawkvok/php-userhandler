@@ -203,8 +203,8 @@ $alt_forms="<div id='alt_logins'>
 </div>";
 $login_preamble = "
 	    <h2 id='title'>User Login</h2>";
-if($_REQUEST['m']=='login_error') $login_preamble.="<h3 class='bg-warning'>There was a problem setting your login credentials. Please try again.</h3>";
-$loginform = "
+if($_REQUEST['m']=='login_error') $login_preamble.="<div class='alert alert-warning'><button type='button' class='close' data-dismiss='alert' aria-label='Close'><span aria-hidden='true'>&times;</span></button><p><strong>There was a problem setting your login credentials</strong>. Please try again.</p></div>";
+$loginform = "<script src='bower_components/bootstrap/dist/js/bootstrap.min.js' type='text/javascript' charset='utf-8'></script>
 	    <form id='login' method='post' action='?q=submitlogin' class='form-horizontal'>
             <fieldset>
               <legend>Login</legend>
@@ -218,7 +218,7 @@ $loginform = "
 	      <label for='password' class='col-sm-3 col-md-2'>
 		Password:
 	      </label>
-	      <input class='col-sm-5 col-md-3' type='password' name='password' id='password' placeholder='Password' class='password-input' required='required'/>
+	      <input class='col-sm-5 col-md-3' type='password' name='password' id='password' placeholder='Password' class='password-input' required='required'/> <span class='glyphicon glyphicon-question-sign do-password-reset' id='reset-password-icon' data-toggle='tooltip' title='Forgot Password?'></span>
 </div>
 </fieldset>";
 $loginform_close="	      <br/>
@@ -281,7 +281,7 @@ if($_REQUEST['q']=='submitlogin')
               }
             if(!$cookie_result['status'])
               {
-                echo "<div class='bg-warning'>".$cookie_result['error']."</div>";
+                  echo "<div class='alert alert-warning'><button type='button' class='close' data-dismiss='alert' aria-label='Close'><span aria-hidden='true'>&times;</span></button>".$cookie_result['error']."</div>";
                 if($debug) echo "<p>Got a cookie error, see above cookie result</p>";
               }
             else
@@ -400,7 +400,7 @@ if($_REQUEST['q']=='submitlogin')
           {
             ob_end_flush();
             $login_output.=$login_preamble;
-            $login_output.="<div class='bg-warning'><p>Sorry! <br/>" . $res['message'] . "</p><aside class='ssmall'>Did you mean to <a href='?q=create'>create a new account instead?</a></aside></div>";
+            $login_output.="<div class='alert alert-warning'><button type='button' class='close' data-dismiss='alert' aria-label='Close'><span aria-hidden='true'>&times;</span></button><p><strong>Sorry!</strong> " . $res['message'] . "</p><aside class='ssmall'>Did you mean to <a href='?q=create' class='alert-link'>create a new account instead?</a> Or did you need to <a href='#' class='alert-link do-password-reset'>reset your password?</a></aside></div>";
             $failcount=intval($_POST['failcount'])+1;
             $loginform_whole = $loginform."
               <input type='hidden' name='failcount' id='failcount' value='$fail'/>".$loginform_close;
@@ -419,14 +419,14 @@ if($_REQUEST['q']=='submitlogin')
                 $query2="UPDATE `$default_user_table` SET disabled=true WHERE id=$id";
                 $l=openDB();
                 $result1=mysqli_query($l,$query);
-                if(!$result1) echo "<p class='bg-warning'>".mysqli_error($l)."</p>";
+                if(!$result1) echo "<div class='alert alert-warning'><button type='button' class='close' data-dismiss='alert' aria-label='Close'><span aria-hidden='true'>&times;</span></button><p>".mysqli_error($l)."</p></div>";
                 else
                   {
                     $result2=execAndCloseDB($l,$query2);
-                    if(!$result2) echo "<p class='bg-warning'>".mysqli_error($l)."</p>";
+                    if(!$result2) echo "<div class='alert alert-warning'><button type='button' class='close' data-dismiss='alert' aria-label='Close'><span aria-hidden='true'>&times;</span></button><p>".mysqli_error($l)."</p></div>";
                     else
                       {
-                        $login_output.="<p>Sorry, you've had ten failed login attempts. Your account has been disabled for 1 hour.</p>";
+                          $login_output.="<div class='alert alert-danger'><button type='button' class='close' data-dismiss='alert' aria-label='Close'><span aria-hidden='true'>&times;</span></button><p><strong>Sorry, you've had ten failed login attempts.</strong> Your account has been disabled for 1 hour.</p></div>";
                       }
                   }
 
@@ -534,7 +534,7 @@ else if($_REQUEST['q']=='create')
             $email_preg="/[a-z0-9!#$%&'*+=?^_`{|}~-]+(?:\.[a-z0-9!#$%&'*+=?^_`{|}~-]+)*@(?:[a-z0-9](?:[a-z0-9-]*[a-z0-9])?\.)+(?:[a-z]{2}|com|org|net|edu|gov|mil|biz|info|mobi|name|aero|asia|jobs|museum)\b/";
             if(!empty($_POST['honey']))
               {
-                $login_ouptut.="<p class='bg-warning'>Whoops! You tripped one of our bot tests. If you are not a bot, please go back and try again. Read your fields carefully!</p>";
+                  $login_ouptut.="<div class='alert alert-warning'><button type='button' class='close' data-dismiss='alert' aria-label='Close'><span aria-hidden='true'>&times;</span></button><p><strong>Whoops!</strong> You tripped one of our bot tests. If you are not a bot, please go back and try again. Read your fields carefully!</p></div>";
                 $_POST['email']='bob';
               }
             # https://developers.google.com/recaptcha/docs/verify
@@ -641,24 +641,24 @@ else if($_REQUEST['q']=='create')
                             else
                               {
                                 if($debug) $login_output.=displayDebug($res);
-                                $login_output.="<p class='bg-warning'>".$res["error"]."</p><p>Use your browser's back button to try again.</p>";
+                                $login_output.="<div class='alert alert-warning'><button type='button' class='close' data-dismiss='alert' aria-label='Close'><span aria-hidden='true'>&times;</span></button><p>".$res["error"]."</p><p>Use your browser's back button to try again.</p></div>";
                                 $deferredJS = "console.error('Got response',".json_encode($res).")";
                               }
                             ob_end_flush();
                           }
                         else
                           {
-                            $login_output.="<p class='bg-warning'>Your password was not long enough ($minimum_password_length characters) or did not match minimum complexity levels (one upper case letter, one lower case letter, one digit or special character). You can also use <a href='http://imgs.xkcd.com/comics/password_strength.png' id='any_long_pass'>any long password</a> of at least $password_threshold_length characters. Please go back and try again.</p>";
+                              $login_output.="<div class='alert alert-warning'><button type='button' class='close' data-dismiss='alert' aria-label='Close'><span aria-hidden='true'>&times;</span></button><p>Your password was not long enough ($minimum_password_length characters) or did not match minimum complexity levels (one upper case letter, one lower case letter, one digit or special character). You can also use <a href='http://imgs.xkcd.com/comics/password_strength.png' id='any_long_pass'>any long password</a> of at least $password_threshold_length characters. Please go back and try again.</p></div>";
                           }
                       }
-                    else $login_output.="<p class='bg-warning'>Your passwords did not match. Please go back and try again.</p>";
+                    else $login_output.="<div class='alert alert-warning'><button type='button' class='close' data-dismiss='alert' aria-label='Close'><span aria-hidden='true'>&times;</span></button><p>Your passwords did not match. Please go back and try again.</p></div>";
                   }
-                else $login_output.="<p class='bg-warning'>Error: Your email address was invalid. Please enter a valid email.</p>";
+                else $login_output.="<div class='alert alert-warning'><button type='button' class='close' data-dismiss='alert' aria-label='Close'><span aria-hidden='true'>&times;</span></button><p><strong>Error</strong>: Your email address was invalid. Please enter a valid email.</p></div>";
               }
           }
         else $login_output.=$createform;
       }
-    else $login_output.="<p class='bg-warning'>This site's ReCAPTCHA library hasn't been set up. Please contact the site administrator.</p>";
+    else $login_output.="<div class='alert alert-warning'><button type='button' class='close' data-dismiss='alert' aria-label='Close'><span aria-hidden='true'>&times;</span></button><p>This site's ReCAPTCHA library hasn't been set up. Please contact the site administrator.</p></div>";
   }
 else if($_REQUEST['q'] == "verify")
   {
@@ -672,11 +672,11 @@ else if(isset($_REQUEST['confirm']))
     $result = $user->verifyUserAuth($encoded_key,$token,$userToActivate);
     if($result['status'] === false)
       {
-        $login_output .= "<h1 class='bg-warning'>Could not verify user</h1><p>".$result['message']."</p>";
+          $login_output .= "<div class='alert alert-warning'><button type='button' class='close' data-dismiss='alert' aria-label='Close'><span aria-hidden='true'>&times;</span></button><h1>Could not verify user</h1><p>".$result['message']."</p></div>";
       }
     else
       {
-        $login_output .= "<p>The user was successfully activated. Check your inbox for a confirmation.</p>";
+          $login_output .= "<div class='alert alert-info'><button type='button' class='close' data-dismiss='alert' aria-label='Close'><span aria-hidden='true'>&times;</span></button><p>The user was successfully activated. Check your inbox for a confirmation.</p></div>";
       }
     if($debug)
       {
@@ -709,7 +709,9 @@ else if(isset($_REQUEST['2fa']))
       {
         # Remove 2FA from the user
         $totp_remove_form = "<section id='totp_remove_section'>
-  <p id='totp_message' class='bg-warning'>Are you sure you want to disable two-factor authentication?</p>
+  <div class='alert alert-warning'>
+    <p id='totp_message'>Are you sure you want to disable two-factor authentication?</p>
+  </div>
   <form id='totp_remove' onsubmit='event.preventDefault();' class='form-horizontal'>
     <fieldset>
       <legend>Remove Two-Factor Authentication</legend>
@@ -724,7 +726,7 @@ else if(isset($_REQUEST['2fa']))
       }
     else if (!$logged_in)
       {
-        $login_output .= "<p class='bg-warning'>You have to be logged in to set up two factor authentication.<br/><a href='?q=login'>Click here to log in</a></p>";
+          $login_output .= "<div class='alert alert-warning'><p>You have to be logged in to set up two factor authentication.<br/><a href='?q=login'>Click here to log in</a></p></div>";
       }
     else
       {
@@ -736,8 +738,14 @@ else if(isset($_REQUEST['2fa']))
         $login_output .= $settings_blob;
       }
   }
+else if(strtolower($_REQUEST["action"]) == "finishpasswordreset")
+{
+    # Pass it off to the JS handler
+    $resetString = " window.checkPasswordReset = true; window.resetParams = new Object(); resetParams.key = '".$_REQUEST["key"]."'; resetParams.verify = '".$_REQUEST["verify"]."'; resetParams.user = '".$_REQUEST["user"]."';";
+}
 else
   {
+      $resetString = "window.checkPasswordReset = false";
       if($redirect_to_home !== true && empty($redirect_url))
       {
           $durl = $self_url;
@@ -749,7 +757,7 @@ else
       }
       
     if(!$logged_in) $login_output.=$login_preamble . $loginform.$loginform_close;
-    else $login_output.="<aside class='ssmall pull-right'><a href='?q=logout' class='btn btn-warning btn-sm'><span class='glyphicon glyphicon-log-out' aria-hidden='true'></span> Logout</a></aside><h1 id='signin_greeting'>Welcome back, $first_name</h1<br/><p id='logout_para'></p>".$settings_blob."<button id='next' name='next' class='btn btn-primary continue click' data-url='$durl'>Continue &#187;</button>";
+    else $login_output.="<aside class='ssmall pull-right'><a href='?q=logout' class='btn btn-warning btn-sm'><span class='glyphicon glyphicon-log-out' aria-hidden='true'></span> Logout</a></aside><h1 id='signin_greeting'>Welcome back, $first_name</h1<br/><p id='logout_para'></p>".$settings_blob."<button id='next' name='next' class='btn btn-primary continue click' data-href='$durl'>Continue &#187;</button>";
     $deferredJS .= "\n$(\"#next\").click(function(){window.location.href=\"".$durl."\";});";
   }
 $login_output.="</div>";
@@ -776,6 +784,7 @@ $deferredScriptBlock = "<script type='text/javascript' src='https://ajax.googlea
         passwords.minLength=$minimum_password_length;
         if(typeof totpParams != 'object') totpParams = new Object();
         $totpOverride
+        $resetString
 
 var loadLast = function () {
     try {
