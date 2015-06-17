@@ -19,10 +19,10 @@ namespace Base32;
 class Base32
 {
     /**
-	 * Table for encoding base32
-	 *
-	 * @var array
-	 */
+     * Table for encoding base32
+     *
+     * @var array
+     */
     private static $encode = array(
         0 => 'A',
         1 => 'B',
@@ -60,10 +60,10 @@ class Base32
     );
 
     /**
-	 * Table for decoding base32
-	 *
-	 * @var array
-	 */
+     * Table for decoding base32
+     *
+     * @var array
+     */
     private static $decode = array(
         'A' => 0,
         'B' => 1,
@@ -101,12 +101,12 @@ class Base32
     );
 
     /**
-	 * Creates an array from a binary string into a given chunk size
-	 *
-	 * @param string $binaryString String to chunk
-	 * @param integer $bits Number of bits per chunk
-	 * @return array
-	 */
+     * Creates an array from a binary string into a given chunk size
+     *
+     * @param string $binaryString String to chunk
+     * @param integer $bits Number of bits per chunk
+     * @return array
+     */
     private static function chunk($binaryString, $bits)
     {
         $binaryString = chunk_split($binaryString, $bits, ' ');
@@ -119,27 +119,27 @@ class Base32
     }
 
     /**
-	 * Encodes into base32
-	 *
-	 * @param string $string Clear text string
-	 * @return string Base32 encoded string
-	 */
+     * Encodes into base32
+     *
+     * @param string $string Clear text string
+     * @return string Base32 encoded string
+     */
     public static function encode($string)
     {
         if (strlen($string) == 0) {
-			// Gives an empty string
+            // Gives an empty string
 
             return '';
-		}
+        }
 
         // Convert string to binary
         $binaryString = '';
 
-		foreach (str_split($string) as $s) {
-			// Return each character as an 8-bit binary string
+        foreach (str_split($string) as $s) {
+            // Return each character as an 8-bit binary string
             $s = decbin(ord($s));
-			$binaryString .= str_pad($s, 8, 0, STR_PAD_LEFT);
-		}
+            $binaryString .= str_pad($s, 8, 0, STR_PAD_LEFT);
+        }
 
         // Break into 5-bit chunks, then break that into an array
         $binaryArray = self::chunk($binaryString, 5);
@@ -169,25 +169,25 @@ class Base32
     }
 
     /**
-	 * Decodes base32
-	 *
-	 * @param string $base32String Base32 encoded string
-	 * @return string Clear text string
-	 */
+     * Decodes base32
+     *
+     * @param string $base32String Base32 encoded string
+     * @return string Clear text string
+     */
     public static function decode($base32String)
     {
-        if (strlen($base32String) == 0) {
-            // Gives an empty string
-            return '';
-        }
-
         // Only work in upper cases
         $base32String = strtoupper($base32String);
 
         // Remove anything that is not base32 alphabet
         $pattern = '/[^A-Z2-7]/';
 
-		$base32String = preg_replace($pattern, '', $base32String);
+        $base32String = preg_replace($pattern, '', $base32String);
+
+        if (strlen($base32String) == 0) {
+            // Gives an empty string
+            return '';
+        }
 
         $base32Array = str_split($base32String);
 
@@ -209,15 +209,15 @@ class Base32
 
         $binaryArray = self::chunk($string, 8);
 
-		$realString = '';
+        $realString = '';
 
-		foreach ($binaryArray as $bin) {
-			// Pad each value to 8 bits
+        foreach ($binaryArray as $bin) {
+            // Pad each value to 8 bits
             $bin = str_pad($bin, 8, 0, STR_PAD_RIGHT);
-			// Convert binary strings to ASCII
+            // Convert binary strings to ASCII
             $realString .= chr(bindec($bin));
-		}
+        }
 
-		return $realString;
+        return $realString;
     }
 }
