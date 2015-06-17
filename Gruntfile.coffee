@@ -13,6 +13,7 @@ module.exports = (grunt) ->
   grunt.loadNpmTasks("grunt-contrib-cssmin")
   # https://www.npmjs.com/package/grunt-phplint
   grunt.loadNpmTasks("grunt-phplint");
+  grunt.loadNpmTasks('grunt-php-cs-fixer')
   grunt.initConfig
     pkg: grunt.file.readJSON('package.json')
     shell:
@@ -78,6 +79,14 @@ module.exports = (grunt) ->
           "js/c.js":"coffee/*.coffee"
     phplint:
       scripts: ["handlers/login_functions.php","login.php"]
+    phpcsfixer:
+      app:
+        dir: ["handlers/login_functions.php"]
+      options:
+        ignoreExitCode: true
+        verbose: true
+        diff: true
+        dryRun: true
     watch:
       scripts:
         files: ["coffee/*.coffee"]
