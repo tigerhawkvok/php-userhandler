@@ -7,7 +7,15 @@
  * If you want a display!
  ***/
 
+if($debug) {
+    error_reporting(E_ALL);
+    ini_set("display_errors", 1);
+    error_log("Login is running in debug mode!");
+}
+
 require_once(dirname(__FILE__).'/CONFIG.php');
+
+# $debug = true;
 
 if($require_two_factor)
   {
@@ -20,6 +28,7 @@ if($ask_twofactor_at_signup || $ask_verify_phone_at_signup)
     # Override any redirects
     $post_create_redirect = false;
   }
+
 
 if(!empty($self_referential))
   {
@@ -34,7 +43,7 @@ if(empty($baseurl))
   {
     $baseurl = 'http';
     if ($_SERVER["HTTPS"] == "on") {$baseurl .= "s";}
-    $baseurl .= "://www.";
+    $baseurl .= "://";
     $baseurl.=$_SERVER['HTTP_HOST'];
   }
 
@@ -44,8 +53,15 @@ $base_arr = explode("/",$base_long);
 $base = $base_arr[0];
 $url_parts = explode(".",$base);
 $tld = array_pop($url_parts);
-$domain = array_pop($url_parts);
+if($url_parts[0] == "www") {
+    $domain = array_pop($url_parts);
+}
+else $domain = implode(".",$url_parts);
 $shorturl = $domain . "." . $tld;
+
+$cookie_domain = str_replace(".","_",$domain);
+$cookielink = $domain."_link";
+$cookie_domain = empty($_COOKIE[$cookielink]) ? $cookie_domain:$domain;
 
 
 if(!is_numeric($minimum_password_length)) $minimum_password_length=8;
@@ -55,12 +71,12 @@ if(!is_numeric($password_threshold_length)) $password_threshold_length=20;
  * Cookie names for tracking
  */
 
-$cookieuser=$domain."_user";
-$cookieperson=$domain."_name";
-$cookieauth=$domain."_auth";
-$cookiekey=$domain."_secret";
-$cookiepic=$domain."_pic";
-$cookielink=$domain."_link";
+$cookieuser=$cookie_domain."_user";
+$cookieperson=$cookie_domain."_name";
+$cookieauth=$cookie_domain."_auth";
+$cookiekey=$cookie_domain."_secret";
+$cookiepic=$cookie_domain."_pic";
+$cookielink=$cookie_domain."_link";
 
 
 /*
@@ -74,9 +90,8 @@ require_once(dirname(__FILE__).'/handlers/login_functions.php');
 $xml=new Xml;
 $user=new UserFunctions;
 
-#$debug = true;
 
-if($debug === true)
+if($debug)
   {
     /*if($r===true) echo "<p>(Database OK)</p>";
       else echo "<p>(Database Error - ' $r ')</p>";*/
@@ -87,6 +102,90 @@ if($debug === true)
     echo "<p>".displayDebug(DBHelper::staticSanitize($xkcd_check))."</p>"; // This should have escaped code
     echo "<p>User Validation:</p>";
     echo displayDebug($user->validateUser($_COOKIE[$cookielink],null,null,true));
+    echo displayDebug($_COOKIE[$cookielink]);
+    echo displayDebug($_COOKIE);
+    echo "</div>";
+  }
+
+$login_output = "";
+
+if($_REQUEST['q']=='logout')
+  {
+    setcookie($cookieuser,false,time()-3600*24*365,'/');
+    setcookie($cookieperson,false,time()-3600*24*365,'/');
+    setcookie($cookieauth,false,time()-3600*24*365,'/');
+    setcookie($cookiekey,false,time()-3600*24*365,'/');
+    setcookie($cookiepic,false,time()-3600*24*365,'/');
+    // do JS cookie wipe too
+    $deferredJS.="\n$.removeCookie('$cookieuser',{path:'/'});";
+    $deferredJS.="\n$.removeCookie('$cookieperson',{path:'/'});";
+    $deferredJS.="\n$.removeCookie('$cookieauth',{path:'/'});";
+    $deferredJS.="\n$.removeCookie('$cookiekey',{path:'/'});";
+    $deferredJS.="\n$.removeCookie('$cookiepic',{path:'/'});";
+    $deferredJS.="\nresetLoginState();";
+    $deferredScriptBlock = "<script type='text/javascript' src='https://ajax.googleapis.com/ajax/libs/jquery/2.1.1/jquery.min.js'></script>
+<script type='text/javascript' src='".$relative_path."js/loadJQuery.js'></script>
+<script type='text/javascript'>
+var loadLast = function () {
+    try {
+        $deferredJS
+    }
+    catch (e)
+    {
+        console.error(\"Couldn't load deferred calls\");
+    }
+}
+</script>";
+    header("Refresh: 2; url=".$baseurl);
+    ob_end_flush();
+    $login_output.="<h1>Logging out ...</h1>".$deferredScriptBlock;
+  }
+
+try
+{
+  $logged_in=$user->validateUser($_COOKIE[$cookielink]);
+  if(!$user->has2FA() && $require_two_factor === true && !isset($_REQUEST['2fa']) && $logged_in && $_REQUEST['q']!='logout')
+    {
+      # If require two factor is on, always force it post login
+      header("Refresh: 0; url=".$self_url."?2fa=t");
+      $deferredJS.="\nwindow.location.href=\"".$self_url."?2fa=t\";";
+      ob_end_flush();
+    }
+  # This should only show when there isn't two factor enabled ...
+  $twofactor = $user->has2FA() ? "Remove two-factor authentication":"Add two-factor authentication";
+  $phone_verify_template = "<form id='verify_phone' onsubmit='event.preventDefault();'>
+  <input type='tel' id='phone' name='phone' value='".$user->getPhone()."' readonly='readonly'/>
+  <input type='hidden' id='username' name='username' value='".$user->getUsername()."'/>
+  <button id='verify_phone_button'>Verify Phone Now</button>
+  <p>
+    <small>
+      <a href='#' id='verify_later'>
+        Verify Later
+      </a>
+    </small>
+  </p>
+</form>";
+  try
+    {
+  $needPhone = !$user->canSMS();
+$deferredJS .= "console.log('Needs phone? ',".strbool($needPhone).",".DBHelper::staticSanitize($user->getPhone()).");\n";
+  $altPhone = "<p>Congratulations! Your phone number is verified.</p>";
+}
+  catch(Exception $e)
+    {
+  $needPhone = false;
+  $deferredJS .= "console.warn('An exception was thrown checking for SMS-ability:','".$e->getMessage()."');\n";
+  $altPhone = "<p>You don't have a phone number registered with us. Please go to account settings and add a phone number.</p>";
+}
+  $verifyphone_link =  $needPhone ? "<li><a href='?q=verify'>Verify Phone</a></li>":null;
+  $phone_verify_form = $needPhone ? $phone_verify_template : $altPhone;
+
+}
+catch (Exception $e)
+  {
+    # There have been no cookies set.
+    $logged_in = false;
+    $twofactor = "Please log in.";
   }
 
 $login_output = "";
@@ -235,7 +334,7 @@ if($_REQUEST['q']=='submitlogin')
         if($res[0] === false && $res["totp"] === true)
           {
             # User has two factor authentication. Prompt!
-            $totpclass = $res["error"]===false ? "good":"error";
+            $totpclass = $res["error"]===false ? "bg-success":"bg-danger";
             $is_encrypted = empty($res["encrypted_hash"]) || empty($res["encrypted_secret"]);
             $hash =  $is_encrypted ? $_COOKIE[$cookieauth]:$res["encrypted_hash"];
             $secret =  $is_encrypted ? $_COOKIE[$cookiekey]:$res["encrypted_secret"];
@@ -251,6 +350,8 @@ if($_REQUEST['q']=='submitlogin')
       <input type='hidden' id='hash' name='hash' value='".$hash."'/>
       <input type='hidden' id='remote' name='remote' value='".$_SERVER['REMOTE_ADDR']."'/>
       <input type='hidden' id='encrypted' name='encrypted' value='".$user->strbool($is_encrypted)."'/>
+      <br/>
+      <br/>
       <button id='verify_totp_button' class='totpbutton btn btn-primary'>Verify</button>
     </fieldset>
     <p><small><a href='#' id='alternate_verification_prompt'>I can't use my app</a></small></p>
@@ -444,6 +545,7 @@ else if($_REQUEST['q']=='create')
     // Create a new user
     // display login form
     // include a captcha and honeypot
+
     $login_output .= "<link rel='stylesheet' type='text/css' href='".$relative_path."css/otp.min.css'/>";
     if(!empty($recaptcha_public_key) && !empty($recaptcha_private_key))
       {
@@ -457,7 +559,7 @@ else if($_REQUEST['q']=='create')
               <div id='password_security' class='bs-callout bs-callout-info invisible col-sm-4 hidden-xs'>
 
               </div>
-	    <form id='login' method='post' action='?q=create&amp;s=next' class='form-horizontal pull-left col-sm-8'>
+	    <form id='login' method='post' action='?q=create&amp;s=next' class='form-horizontal pull-left col-sm-8 creation-form'>
 <h1>Welcome to $shorturl</h1>
 <fieldset>
 <legend>Create a new account</legend>
@@ -522,7 +624,8 @@ else if($_REQUEST['q']=='create')
 	      <button id='createUser_submit' class='btn btn-success btn-lg col-xs-12 col-lg-3' disabled='disabled'>Create</button>
 </fieldset>
 	    </form><br class='clear'/>";
-        $secnotice="<br/><p><small>Remember your security best practices! Do not use the same password you use for other sites. While your information is <a href='http://en.wikipedia.org/wiki/Cryptographic_hash_function' $newwindow>hashed</a> with a multiple-round hash function, <a href='http://arstechnica.com/security/2013/05/how-crackers-make-minced-meat-out-of-your-passwords/' $newwindow>passwords are easy to crack!</a></small></p>";
+        $secnotice="<br/><p><small>Remember your security best practices! Do not use the same password you use for other sites. While your information is <a href='http://en.wikipedia.org/wiki/Cryptographic_hash_function' $newwindow>hashed</a> with a multiple-round hash function, <a href='http://arstechnica.com/security/2013/05/how-crackers-make-minced-meat-out-of-your-passwords/' $newwindow>passwords are easy to crack!</a></small></p>
+";
         $createform.=$secnotice; # Password security notice
         if($_SERVER["HTTPS"] != "on" && $displaywarnings === true)
           {
@@ -544,13 +647,20 @@ else if($_REQUEST['q']=='create')
               "response" => $_POST["g-recaptcha-response"],
               "remoteip" => $_SERVER["REMOTE_ADDR"]
             );
+try {
             $resp = json_decode(do_post_request($recaptcha_uri,$recaptcha_params),true);
+} catch(Exception $e)
+{
+$resp["success"] = false;
+$resp["post-error"] = $e->getMessage();
+}
 
             if (!$resp["success"] && !$debug)
               {
-                // What happens when the CAPTCHA was entered incorrectly
-                $login_output.=("The reCAPTCHA wasn't entered correctly. Go back and try it again." .
-                "(reCAPTCHA said: " . $resp["error-codes"] . ")");
+                // What happens when the CAPTCHA was entered
+                // incorrectly
+$error = empty($resp["error-codes"]) ? $resp["post-error"]:$resp["error-codes"];
+$login_output.= "<div class='alert alert-danger'><button type='button' class='close' data-dismiss='alert' aria-label='Close'><span aria-hidden='true'>&times;</span></button>The reCAPTCHA wasn't entered correctly. Go back and try it again." . " (reCAPTCHA said: " . $error . ")</div>";
               }
             else
               {
@@ -564,10 +674,11 @@ else if($_REQUEST['q']=='create')
                             $res=$user->createUser($_POST['username'],$_POST['password'],array($_POST['fname'],$_POST['lname']),$_POST['dname'],$_POST['phone']);
                             if($res["status"])
                               {
-                                $login_output.="<h3>".$res["message"]."</h3>"; //jumpto1
+                                $login_output.="<div class='alert alert-success text-center center-block'><button type='button' class='close' data-dismiss='alert' aria-label='Close'><span aria-hidden='true'>&times;</span></button>
+<h3> ".$res["message"]." </h3></div>"; //jumpto1
                                 if($user->needsManualAuth())
                                   {
-                                    $login_output.="<p>Your ability to login will be restricted until you've been authorized.</p>";
+                                    $login_output.="<div class='alert alert-warning text-center center-block'><p>Your ability to login will be restricted until you've been authorized.</p></div>";
                                   }
                                 // email user
                                 $to=$_POST['username'];
@@ -575,12 +686,13 @@ else if($_REQUEST['q']=='create')
                                 $headers .= 'Content-type: text/html; charset=iso-8859-1' . "\r\n";
                                 $headers .= "From: Account Registration <blackhole@".$shorturl.">";
                                 $subject='New Account Creation';
-                                $body = "<p>Congratulations! Your new account has been created. Your username is this email address ($to). We do not keep a record of your password we can access, so please be sure to remember it!</p><p>If you do forget your password, you can <a href='mailto:".$service_email."?subject=Reset%20Password'>email support</a> to reset your password for you with a picture of government ID with your registered name and zip code. All secure data will be lost in the reset.</p>";
+                                $body = "<p>Congratulations! Your new account has been created. Your username is this email address ($to). We do not keep a record of your password we can access, so please be sure to remember it!</p><p>If you do forget your password, you can go to the login page to reset it. All secure data will be lost in the reset.</p>";
                                 if(mail($to,$subject,$body,$headers)) $login_output.="<p>A confirmation email has been sent to your inbox at $to .</p>";
                                 else
                                   {
                                     // no email
                                   }
+
                                 /***
                                  * Post login behavior ...
                                  ***/
@@ -621,7 +733,7 @@ else if($_REQUEST['q']=='create')
                                   {
                                     # Give user 2FA
                                     $totp_add_form = "<section id='totp_add'>
-  <p id='totp_message'>Two factor authentication is very secure, but when you enable it, you'll be unable to log in without your mobile device.</p>
+  <p id='totp_message'>Two factor authentication is required when setting up an account with Lemotion. If you don't know what this is, click \"Help with two-factor authentication\" below.</p>
   <form id='totp_start' onsubmit='event.preventDefault();'>
     <fieldset>
       <legend>Login to continue</legend>
@@ -676,7 +788,15 @@ else if(isset($_REQUEST['confirm']))
       }
     else
       {
-          $login_output .= "<div class='alert alert-info'><button type='button' class='close' data-dismiss='alert' aria-label='Close'><span aria-hidden='true'>&times;</span></button><p>The user was successfully activated. Check your inbox for a confirmation.</p></div>";
+          if ($result["admin_confirm_sent"] && $result["user_confirm_sent"])
+          {
+            $messageFollowUp = "Check your inbox for a confirmation.";
+          }
+          else
+          {
+            $messageFollowUp = "<strong>However, not all confirmations could not be sent</strong> (".$result["error"].").";
+          }
+          $login_output .= "<div class='alert alert-info'><button type='button' class='close' data-dismiss='alert' aria-label='Close'><span aria-hidden='true'>&times;</span></button><p>The user was successfully activated. $messageFollowUp</p></div>";
       }
     if($debug)
       {
@@ -685,10 +805,10 @@ else if(isset($_REQUEST['confirm']))
   }
 else if(isset($_REQUEST['2fa']))
   {
-    if($logged_in && !$user->has2FA())
+      if($logged_in && !$user->has2FA())
       {
-        # Give user 2FA
-        $totp_add_form = "<section id='totp_add'>
+          # Give user 2FA
+          $totp_add_form = "<section id='totp_add'>
   <p id='totp_message'>Two factor authentication is very secure, but when you enable it, you'll be unable to log in without your mobile device.</p>
   <form id='totp_start' onsubmit='event.preventDefault();'>
     <fieldset>
@@ -702,13 +822,13 @@ else if(isset($_REQUEST['2fa']))
   </form>
   <a href='#' id='totp_help'>Help with Two-Factor Authentication</a>
 </section>";
-        if($require_two_factor) $totp_add_form = "<h1>This site requires two-factor authentication</h1><h2>Please set up two-factor authentication to continue.</h2>".$totp_add_form;
-        $login_output .= $totp_add_form;
+          if($require_two_factor) $totp_add_form = "<h1>This site requires two-factor authentication</h1><h2>Please set up two-factor authentication to continue.</h2>".$totp_add_form;
+          $login_output .= $totp_add_form;
       }
-    else if ($logged_in && $user->has2FA())
+      else if ($logged_in && $user->has2FA())
       {
-        # Remove 2FA from the user
-        $totp_remove_form = "<section id='totp_remove_section'>
+          # Remove 2FA from the user
+          $totp_remove_form = "<section id='totp_remove_section'>
   <div class='alert alert-warning'>
     <p id='totp_message'>Are you sure you want to disable two-factor authentication?</p>
   </div>
@@ -722,20 +842,20 @@ else if(isset($_REQUEST['2fa']))
     </fieldset>
   </form>
 </section>";
-        $login_output .= $totp_remove_form;
+          $login_output .= $totp_remove_form;
       }
-    else if (!$logged_in)
+      else if (!$logged_in)
       {
           $login_output .= "<div class='alert alert-warning'><p>You have to be logged in to set up two factor authentication.<br/><a href='?q=login'>Click here to log in</a></p></div>";
       }
-    else
+      else
       {
-        # Should never trigger
-        throw(new Exception("Unexpected condition setting up two-factor authentication"));
+          # Should never trigger
+          throw(new Exception("Unexpected condition setting up two-factor authentication"));
       }
-    if($logged_in)
+      if($logged_in)
       {
-        $login_output .= $settings_blob;
+          $login_output .= $settings_blob;
       }
   }
 else if(strtolower($_REQUEST["action"]) == "finishpasswordreset")
@@ -744,39 +864,39 @@ else if(strtolower($_REQUEST["action"]) == "finishpasswordreset")
     $resetString = " window.checkPasswordReset = true; window.resetParams = new Object(); resetParams.key = '".$_REQUEST["key"]."'; resetParams.verify = '".$_REQUEST["verify"]."'; resetParams.user = '".$_REQUEST["user"]."';";
 }
 else
-  {
-      $resetString = "window.checkPasswordReset = false";
-      if($redirect_to_home !== true && empty($redirect_url))
-      {
-          $durl = $self_url;
-      }
-      else
-      {
-          if($redirect_to_home === true) $durl = $baseurl;
-          else $durl = $redirect_url;
-      }
-      
+{
+    $resetString = "window.checkPasswordReset = false";
+    if($redirect_to_home !== true && empty($redirect_url))
+    {
+        $durl = $self_url;
+    }
+    else
+    {
+        if($redirect_to_home === true) $durl = $baseurl;
+        else $durl = $redirect_url;
+    }
+
     if(!$logged_in) $login_output.=$login_preamble . $loginform.$loginform_close;
-    else $login_output.="<aside class='ssmall pull-right'><a href='?q=logout' class='btn btn-warning btn-sm'><span class='glyphicon glyphicon-log-out' aria-hidden='true'></span> Logout</a></aside><h1 id='signin_greeting'>Welcome back, $first_name</h1<br/><p id='logout_para'></p>".$settings_blob."<button id='next' name='next' class='btn btn-primary continue click' data-href='$durl'>Continue &#187;</button>";
+    else $login_output.="<aside class='ssmall pull-right'><a href='?q=logout' class='btn btn-warning btn-sm'><span class='glyphicon glyphicon-log-out' aria-hidden='true'></span> Logout</a></aside><h1 id='signin_greeting'>Welcome back, $first_name</h1><br/><p id='logout_para'></p>".$settings_blob."<button id='next' name='next' class='btn btn-primary continue click' data-href='$durl'>Continue &#187;</button>";
     $deferredJS .= "\n$(\"#next\").click(function(){window.location.href=\"".$durl."\";});";
-  }
-$login_output.="</div>";
-ob_end_flush();
+                        }
+    $login_output.="</div>";
+    ob_end_flush();
 
-$totpOverride = !empty($redirect_url) ? "window.totpParams.home = \"".$redirect_url."\";\n":null;
-$totpOverride .= !empty($relative_path) ? "window.totpParams.relative = \"".$relative_path."\";\n":null;
-$totpOverride .= !empty($working_subdirectory) ? "window.totpParams.subdirectory = \"".$working_subdirectory."\";\n":null;
-try
-  {
-    $need_tfa = !$user->has2FA();
-  }
-catch (Exception $e)
-  {
-    $need_tfa = false;
-  }
-$totpOverride .= $need_tfa && $require_two_factor ? "window.totpParams.tfaLock = true;\n":"window.totpParams.tfaLock = false;\n";
+    $totpOverride = !empty($redirect_url) ? "window.totpParams.home = \"".$redirect_url."\";\n":null;
+    $totpOverride .= !empty($relative_path) ? "window.totpParams.relative = \"".$relative_path."\";\n":null;
+    $totpOverride .= !empty($working_subdirectory) ? "window.totpParams.subdirectory = \"".$working_subdirectory."\";\n":null;
+    try
+    {
+        $need_tfa = !$user->has2FA();
+    }
+    catch (Exception $e)
+    {
+        $need_tfa = false;
+    }
+    $totpOverride .= $need_tfa && $require_two_factor ? "window.totpParams.tfaLock = true;\n":"window.totpParams.tfaLock = false;\n";
 
-$deferredScriptBlock = "<script type='text/javascript' src='https://ajax.googleapis.com/ajax/libs/jquery/2.1.1/jquery.min.js'></script>
+    $deferredScriptBlock = "<script type='text/javascript' src='https://ajax.googleapis.com/ajax/libs/jquery/2.1.1/jquery.min.js'></script>
 <script type='text/javascript' src='".$relative_path."js/loadJQuery.min.js'></script>
 <script type='text/javascript'>
         if(typeof passwords != 'object') passwords = new Object();
@@ -796,6 +916,7 @@ var loadLast = function () {
     }
 }
 </script>";
+
 
 $login_output .= $deferredScriptBlock;
 ?>
