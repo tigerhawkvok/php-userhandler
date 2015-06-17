@@ -1695,7 +1695,6 @@ class UserFunctions extends DBHelper
         return $passwordNice;
   }
 
-
     public function resetUserPassword($method = null, $totp = null)
     {
         /***
@@ -1717,7 +1716,7 @@ class UserFunctions extends DBHelper
         }
         catch(Exception $e)
         {
-            $callback = array("status"=>false,"action"=>"BAD_USER");
+            $callback = array("status"=>false,"action"=>"BAD_USER", "error"=>$e->getMessage());
             return $callback;
         }
         if($this->has2FA() && $totp == null)
@@ -1732,7 +1731,7 @@ class UserFunctions extends DBHelper
                 # Verify the 2FA
                 if(!$this->checkTOTP($totp))
                 {
-                    return array("status"=>false, "action"=>"BAD_TOTP");
+                    return array("status"=>false, "action"=>"BAD_TOTP", "canSMS"=>$this->canSMS());
                 }
             }
             # We want to do a soft canSMS check, first.
@@ -1746,17 +1745,32 @@ class UserFunctions extends DBHelper
                     return $callback;
                 }
             }
+            else if($this->canSMS(false) and $method == "sms")
+            {
+                # The system can SMS ...
+                if(!$this->canSMS()) 
+                {
+                    # The system can SMS but the user isn't verified, but asked
+                    # for SMS verification.
+                    $callback = array("status"=>false,"action"=>"SMS_NOT_VERIFIED");
+                    return $callback;
+                }
+                else
+                {
+                    # The user and system CAN SMS, and the method is set. We
+                    # can do this normally, now.
+                }
+            }
+            else if(!$this->canSMS(false) and $method == "sms") 
+            {
+                # The system can't SMS
+                $callback = array("status"=>false,"action"=>"ILLEGAL_METHOD","error"=>"The system is not set up for SMS", "human_error"=>"The system requested to send a text message, but it's unsupported. Please try a different method.");
+                return $callback;
+            }
             else if(!$this->canSMS(false) and empty($method))
             {
                 # If the system can't SMS, and there's no method, assume email
                 $method = "email";
-            }
-            else if(!$this->canSMS() and $method == "sms")
-            {
-                # The system can SMS but the user isn't verified, but asked
-                # for SMS verification.
-                $callback = array("status"=>false,"action"=>"SMS_NOT_VERIFIED");
-                return $callback;
             }
             # Calculate out the secrets
             /*
@@ -1798,28 +1812,44 @@ class UserFunctions extends DBHelper
                 if(substr($rel_dir,-1) != "/") $rel_dir = $rel_dir . "/";
                 $email_link = $this->getQualifiedDomain() . $rel_dir . $url ."?action=finishpasswordreset&key=".urlencode($user_tokens["key"])."&verify=".urlencode($user_tokens["verify"]) . "&user=".$this->getUsername();
                 $mail = $this->getMailObject();
-                $mail->Subject = $this->getDomain() . " Account Reset";
-                $mail->Body = "<p>You've requested to reset the password to ".$this->getDomain().". Click or copy-paste the link below to reset your password.</p><pre><a href='".$email_link."'>".$email_link."</a></pre><p>If you didn't request a password change, you can ignore this email.</p>.";
+                $mail->Subject = "[". $this->getDomain() . "] Account Reset";
+                $mail->Body = "<p>You've requested to reset the password to ".$this->getDomain().". Click or copy-paste the link below to reset your password.</p><pre><a href='".$email_link."'>".$email_link."</a></pre><p>You can also enter a verification code of <strong>".$user_tokens["verify"]."</strong> and key of <strong>".$user_tokens["key"]."</strong> on the reset page.</p><p>If you didn't request a password change, you can ignore this email.</p>.";
                 $mail->addAddress($this->getUsername());
                 $status = $mail->send();
+                $email = array(
+                    "to"  => $this->getUsername(),
+                    "subject" => $mail->Subject,
+                    "body" => $mail->Body
+                );
+                # You can include email as a callback arg for debugging, but
+                # not for release -- VERY insecure
                 $callback = array("status"=>$status,"method"=>"email");
                 if(!$status)
                 {
                     $callback["error"] = $mail->ErrorInfo;
+                    $callback["human_error"] = "There was a problem sending the email. Please try again later.";
                 }
                 return $callback;
             }
             else if ($method == "sms")
             {
                 # Reset by text
-                $sms_message = "At the reset password prompt, for KEY enter ".$user_tokens["key"]." , and for VERIFY enter ".$user_tokens["verify"];
-                $t_obj = $this->textUser($sms_message);
-                return array("status"=>true,"method"=>"sms","twilio"=>$t_obj);
+                if($this->canSMS())
+                {
+                    $sms_message = "At the reset password prompt, for KEY enter ".$user_tokens["key"]." , and for VERIFY enter ".$user_tokens["verify"];
+                    $t_obj = $this->textUser($sms_message);
+                    return array("status"=>true,"method"=>"sms","twilio"=>$t_obj);
+                }
+                else
+                {
+                    return array("status"=>false,"method"=>"sms","error"=>"The user can't SMS","human_error"=>"Sorry, SMS is not a valid option for this account. Please try another option.");
+                }
             }
             else
             {
                 # Bad reset method
-                $callback = array("status"=>false,"action"=>"INVALID_METHOD");
+                $callback = array("status"=>false,"method"=>$method, "action"=>"INVALID_METHOD" ,"error"=>"INVALID_METHOD", "human_error"=>"The application requested an invalid reset method. Please report this error.");
+                return $callback;
             }
         }
     }
@@ -1845,7 +1875,8 @@ class UserFunctions extends DBHelper
             {
                 try
                 {
-                    return $this->changeUserPassword($passwordBlob,null,true);
+                    $emailPassword = $passwordBlob["email_password"] == true;
+                    return $this->changeUserPassword($passwordBlob,$emailPassword,true);
                 }
                 catch(Exception $e)
                 {
@@ -1882,8 +1913,7 @@ class UserFunctions extends DBHelper
     {
         /***
          * Replace the password stored.
-         * If there are any encrypted fields, decrypt them and 
-         * re-encrypt them in the process.
+         * If there are any encrypted fields, decrypt them and re-encrypt them in the process.
          * Trash the encrypted fields if we're resetting.
          * Update the cookies.
          *
@@ -1894,8 +1924,10 @@ class UserFunctions extends DBHelper
          *                                  "verify". Otherwise, it should
          *                                  be the plain-text string of
          *                                  the old password.
-         * @param string $newPassword If $isResetPassword is true, this
-         *                            field can be "true" to email the new password.
+         * @param string $newPassword If $isResetPassword is true,
+         *                            this field can be "true" to
+         *                            email the new password.
+         *
          * @param bool $isResetPassword Is the password being reset?
          ***/
         try
@@ -1958,7 +1990,7 @@ class UserFunctions extends DBHelper
                     $callback["error"] = mysqli_error($l);
                     $callback["new_password"] = null;
                 }
-        
+
                 $r2=mysqli_query($l,$finish_query);
                 $callback["status"] = $r && $r2;
                 if ($r2 !== true)
@@ -1969,10 +2001,10 @@ class UserFunctions extends DBHelper
                 {
                     # It all worked, remove the secret
                     $this->setTempSecret();
-                    if($doEmailPassword === true) 
+                    if($doEmailPassword === true)
                     {
                         $mail = $this->getMailObject();
-                        $mail->Subject = $this->getDomain() . " New Password";
+                        $mail->Subject = "[" . $this->getDomain() . "] New Password";
                         $mail->Body = "<p>You've successfully reset the password to ".$this->getDomain().". Here is your new password:.</p><pre>$newPassword</pre><p>If you didn't request a password change, please log in and change your password IMMEDIATELY, and we suggest adding two-factor authentication.</p>.";
                         $mail->addAddress($this->getUsername());
                         $status = $mail->send();
@@ -2044,6 +2076,7 @@ class UserFunctions extends DBHelper
             throw(new Exception("Invalid credentials - " . $e->getMessage()));
         }
     }
+
 
   public function removeThisAccount($username,$password,$totp = false)
   {
