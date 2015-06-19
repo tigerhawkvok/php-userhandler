@@ -85,8 +85,8 @@ module.exports = (grunt) ->
       options:
         ignoreExitCode: true
         verbose: true
-        diff: true
-        dryRun: true
+        #diff: true
+        #dryRun: true
     watch:
       scripts:
         files: ["coffee/*.coffee"]
