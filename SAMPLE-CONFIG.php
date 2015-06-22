@@ -10,6 +10,7 @@ $debug=false;
 $use_javascript_cookies=false;
 $redirect_to_home = true;
 $displaywarnings = true;
+$allow_insecure_connections = false;
 
 $require_two_factor = false;
 
