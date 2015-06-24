@@ -227,12 +227,6 @@ class DBHelper {
   {
     # Emails get mutilated here -- let's check that first
     $preg="/[a-z0-9!#$%&'*+=?^_`{|}~-]+(?:\.[a-z0-9!#$%&'*+=?^_`{|}~-]+)*@(?:[a-z0-9](?:[a-z0-9-]*[a-z0-9])?\.)+(?:[a-z]{2}|com|org|net|edu|gov|mil|biz|info|mobi|name|aero|asia|jobs|museum)\b/";
-    if(preg_match($preg,$input) === 1)
-      {
-        # It's an email, let's escape it and be done with it
-        $output = self::mysql_escape_mimic($input);
-        return $output;
-      }
     if (is_array($input))
       {
         foreach($input as $var=>$val)
@@ -242,6 +236,12 @@ class DBHelper {
       }
     else
       {
+        if(preg_match($preg,$input) === 1)
+        {
+          # It's an email, let's escape it and be done with it
+          $output = self::mysql_escape_mimic($input);
+          return $output;
+        }
         if (get_magic_quotes_gpc())
           {
             $input = stripslashes($input);
@@ -514,7 +514,7 @@ public function doQuery($search,$cols = "*",$boolean_type = "AND", $loose = fals
   $where_arr = array();
   foreach($search as $col=>$crit)
     {
-      $where_arr[] = $loose ? "`".$col."` LIKE '%".$crit."%'":"`".$col."`='".$crit."'";
+      $where_arr[] = $loose ? "LOWER(`".$col."`) LIKE '%".$crit."%'":"`".$col."`='".$crit."'";
     }
   $where = "(".implode(" ".strtoupper($boolean_type)." ",$where_arr).")";
   $query = "SELECT $col_selector FROM `".$this->getTable()."` WHERE $where";
