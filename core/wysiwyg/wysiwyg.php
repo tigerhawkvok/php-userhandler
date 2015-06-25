@@ -4,31 +4,44 @@ require_once(dirname(__FILE__).'/markdown/Michelf/MarkdownExtra.inc.php');
 
 class Wysiwyg
 {
-    public static function toHtml($text)
+    public static function toHtml($text, $detail = false)
     {
-        $parsed = self::parseBlock($text);
+        $markdown = \Michelf\MarkdownExtra::defaultTransform($text);
+        # Clean out the new lines
+        $stripped_markdown = str_replace("\n","",$markdown);
+        $parsed = self::parseBlock($stripped_markdown, true, false);
         if ($parsed["status"] === false) {
-            $parsed["html"] = $text;
+            $parsed["html"] = $markdown;
+            $parsed["status"] = true;
+            $parsed["used_pure_markdown"] = true;
         }
-
-        return MarkdownExtra::defaultTransform($parsed["html"]);
+        else {
+            $parsed["used_pure_markdown"] = false;
+            $temp = preg_replace('/\\\\\'gr/', '\'gr', $parsed["html"]);
+            $temp = preg_replace('/\\\\\'/', '\'', $temp);
+            $parsed["html"] = $temp;
+        }
+        if ($detail) return $parsed;
+        return $parsed["html"];
     }
 
-    public static function fromHtml($html)
+    public static function fromHtml($html, $detail = false)
     {
         # Undo markdown
-        # $markdown =
-        $markdown = $html; # temp
         require_once(dirname(__FILE__)."/html-to-markdown/HTML_To_Markdown.php");
         $markdown = new HTML_To_Markdown($html);
-        return self::deparseBlock($markdown->output());
+        if(!$detail) {
+            return self::deparseBlock($markdown->output());
+        }
+        $detail = array("markdown"=>$markdown->output(),"human"=>self::deparseBlock($markdown->output()));
+        return $detail;
     }
 
     /******
      * The old parsers -- they need function descriptions and much cleanup
      ******/
 
-    public static function parseBlock($block, $sanitize = true, $strip = true, $paragraph = true)
+    public static function parseBlock($block, $sanitize = true, $strip_html = true, $strip_slashes = true, $paragraph = true)
     {
         // check for base64, and decode it if passed
         $raise_error = false;
@@ -40,7 +53,19 @@ class Wysiwyg
             return array("status"=>false,'error' => 'A string wasn\'t provided.');
         }
         if ($sanitize && class_exists('DBHelper')) {
-            $parsed = DBHelper::staticSanitize($block);
+            $parsed = DBHelper::staticSanitize($block, $strip_html);
+            if(!$strip_html) {
+                # Fix the HTML less than greater than escapes
+                $find_array = array (
+                    "&lt;",
+                    "&gt;",
+                );
+                $replace_array = array(
+                    "<",
+                    ">",
+                );
+                $parsed = str_replace($find_array,$replace_array,$parsed);
+            }
         } else {
             # Do a simple port ...
             $parsed = $block;
@@ -227,7 +252,7 @@ class Wysiwyg
                 }
                 $length = $end - $pos;
                 $grk = substr($parsed, $pos + 5, $length - 5);
-                $grk_o = "<span class='greek' lang='gr'>$grk</span>";
+                $grk_o = "<span class='greek' lang='gr' style='font-family:symbol;'>$grk</span>";
                 $parsed = str_replace('[grk]'.$grk.'[/grk]', $grk_o, $parsed);
                 $pos = strpos($parsed, '[grk]');
             }
@@ -386,18 +411,32 @@ class Wysiwyg
             }
         }
 
-        if (strpos($parsed, "<span class='greek' lang='gr'>") !== false) {
-            $pos = strpos($parsed, "<span class='greek' lang='gr'>");
+        if (strpos($parsed, "<span class='greek' lang='gr' style='font-family:symbol;'>") !== false) {
+            $pos = strpos($parsed, "<span class='greek' lang='gr' style='font-family:symbol;'>");
             while ($pos !== false) {
                 $end = strpos($parsed, '</span>', $pos);
                 $length = $end + 7 - $pos;
                 $search = substr($parsed, $pos, $length);
                 $tag = '[grk]';
-                $begin = $pos + 30;
+                $begin = $pos + 58;
                 $length = $end - $begin;
                 $tag .= substr($parsed, $begin, $length).'[/grk]';
                 $parsed = str_replace($search, $tag, $parsed);
                 $pos = strpos($parsed, "<span class='greek' lang='gr'>");
+            }
+        }
+        if (strpos($parsed, "<span class=\"greek\" lang=\"gr\" style=\"font-family:symbol;\">") !== false) {
+            $pos = strpos($parsed, "<span class=\"greek\" lang=\"gr\" style=\"font-family:symbol;\">");
+            while ($pos !== false) {
+                $end = strpos($parsed, '</span>', $pos);
+                $length = $end + 7 - $pos;
+                $search = substr($parsed, $pos, $length);
+                $tag = '[grk]';
+                $begin = $pos + 58;
+                $length = $end - $begin;
+                $tag .= substr($parsed, $begin, $length).'[/grk]';
+                $parsed = str_replace($search, $tag, $parsed);
+                $pos = strpos($parsed, "<span class=\"greek\" lang=\"gr\">");
             }
         }
 
