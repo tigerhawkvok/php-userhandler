@@ -218,12 +218,12 @@ if (!function_exists('shuffle_assoc')) {
 }
 
 if (!function_exists('displayDebug')) {
-    function displayDebug($string)
+    function displayDebug($string, $background = true)
     {
         # alias
-      return debugDisplay($string);
+        return debugDisplay($string, $background);
     }
-    function debugDisplay($string)
+    function debugDisplay($string, $background = true)
     {
         if (is_array($string)) {
             foreach ($string as $k => $el) {
@@ -236,7 +236,7 @@ if (!function_exists('displayDebug')) {
         $string = str_replace('&', '&amp;', $string);
         $string = str_replace('<', '&lt;', $string);
         $string = str_replace('>', '&gt;', $string);
-
+        if(!$background) return $string;
         return "<pre style='background:white;color:black;'>".$string.'</pre>';
     }
 }

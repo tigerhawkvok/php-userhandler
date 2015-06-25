@@ -158,16 +158,17 @@ class DBHelper {
   }
 
 
-  public static function cleanInput($input)
+    public static function cleanInput($input, $strip_html = true)
   {
 
     $search = array(
       '@<script[^>]*?>.*?</script>@si',   // Strip out javascript
-      '@<[\/\!]*?[^<>]*?>@si',            // Strip out HTML tags
       '@<style[^>]*?>.*?</style>@siU',    // Strip style tags properly
       '@<![\s\S]*?--[ \t\n\r]*>@'         // Strip multi-line comments
     );
-
+    if ($strip_html) {
+        $search[] = '@<[\/\!]*?[^<>]*?>@si'; // Strip out HTML tags
+    }
     $output = preg_replace($search, '', $input);
     return $output;
   }
@@ -223,7 +224,7 @@ class DBHelper {
     return $output;
   }
 
-  public static function staticSanitize($input)
+    public static function staticSanitize($input, $strip_html = true)
   {
     # Emails get mutilated here -- let's check that first
     $preg="/[a-z0-9!#$%&'*+=?^_`{|}~-]+(?:\.[a-z0-9!#$%&'*+=?^_`{|}~-]+)*@(?:[a-z0-9](?:[a-z0-9-]*[a-z0-9])?\.)+(?:[a-z]{2}|com|org|net|edu|gov|mil|biz|info|mobi|name|aero|asia|jobs|museum)\b/";
@@ -246,7 +247,7 @@ class DBHelper {
           {
             $input = stripslashes($input);
           }
-        $input  = htmlentities(self::cleanInput($input));
+        $input  = htmlentities(self::cleanInput($input, $strip_html));
         $input=str_replace("_","&#95;",$input); // Fix _ potential wildcard
         $input=str_replace("%","&#37;",$input); // Fix % potential wildcard
         $input=str_replace("'","&#39;",$input);
