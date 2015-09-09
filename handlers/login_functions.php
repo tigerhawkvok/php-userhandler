@@ -99,8 +99,10 @@ class UserFunctions extends DBHelper
         $this->minPasswordLength = $minimum_password_length;
         $this->thresholdLength = $password_threshold_length;
         $this->pwColumn = $password_column;
+        $this->pwcol = $password_column;
         $this->cookieColumn = $cookie_ver_column;
         $this->userColumn = $user_column;
+        $this->usercol = $user_column;
         $this->linkColumn = $link_column;
         $this->tmpColumn = $temporary_storage;
         $this->totpColumn = $totp_column;
@@ -164,6 +166,7 @@ class UserFunctions extends DBHelper
    * Helper functions
    ***/
 
+
   private function getSiteKey()
   {
       return $this->siteKey;
@@ -184,10 +187,12 @@ class UserFunctions extends DBHelper
     {
         return $this->shortUrl;
     }
-    private function getMinPasswordLength()
-    {
-        return $this->minPasswordLength;
-    }
+    private function getMinPasswordLength() {
+        if(!is_numeric($this->minPasswordLength)) {
+            $this->minPasswordLength = 8;
+        }
+        $length = intval($this->minPasswordLength);
+        return $length; }
     private function getThresholdLength()
     {
         return $this->thresholdLength;
@@ -1929,15 +1934,22 @@ class UserFunctions extends DBHelper
                  * validation, which we don't have by definition, so we're
                  * going to manually construct the query here.
                  */
-                $query = 'UPDATE `'.$this->getTable().'` SET `'.$this->pwcol."`='".$pw_store."', `data`=\"".$data.'" WHERE `'.$this->usercol."`='".$this->getUsername()."'";
-                $l = $this->openDB();
-                mysqli_query($l, 'BEGIN');
-                $r = mysqli_query($l, $query);
-                $finish_query = $r ? 'COMMIT' : 'ROLLBACK';
-                $callback = array('status' => $r,'action' => $finish_query,'new_password' => $newPassword);
-                if ($finish_query == 'ROLLBACK') {
-                    $callback['error'] = mysqli_error($l);
-                    $callback['new_password'] = null;
+                $query="UPDATE `".
+                      $this->getTable()."` SET `".
+                      $this->pwcol."`=\"".
+                      $this->sanitize($pwStore)."\", `data`=\"".
+                      $data."\" WHERE `".
+                      $this->userColumn."`='".
+                      $this->getUsername()."'";
+                $l=$this->openDB();
+                mysqli_query($l,'BEGIN');
+                $r=mysqli_query($l,$query);
+                $finish_query= $r ? 'COMMIT':'ROLLBACK';
+                $callback = array('status'=>$r,'action'=>$finish_query,"new_password"=>$newPassword, "new_password_length"=>strlen($newPassword), "minimum_length" => $this->getMinPasswordLength(), "maximum_length" => 8192);
+                if($finish_query == 'ROLLBACK')
+                {
+                    $callback["error"] = mysqli_error($l);
+                    $callback["new_password"] = null;
                 }
 
                 $r2 = mysqli_query($l, $finish_query);
@@ -1945,7 +1957,10 @@ class UserFunctions extends DBHelper
                 if ($r2 !== true) {
                     $callback['error'] = 'Unable to commit your password reset';
                 }
-                if ($callback['status'] === true) {
+                if($callback["status"] === true)
+                {
+                    $verifySetPw = $this->lookupUser($this->getUsername(), $newPassword, false);
+                    $callback["verification_data"] = $verifySetPw["status"];
                     # It all worked, remove the secret
                     $this->setTempSecret();
                     if ($doEmailPassword === true) {
@@ -1977,42 +1992,91 @@ class UserFunctions extends DBHelper
                 if (strlen($newPassword) < $this->getMinPasswordLength()) {
                     throw(new Exception('New password is too short. It should be at least '.$this->getMinPasswordLenght().' characters'));
                 }
-                if (strlen($newPassword) > 8192) {
-                    throw(new Exception('New password is too long. It should be less than 8192 characters'));
-                }
-                require_once dirname(__FILE__).'/../core/stronghash/php-stronghash.php';
-                $hash = new Stronghash();
+                $currentUser = $userLookup["data"];
+                if(strlen($newPassword) < $this->getMinPasswordLength()) throw(new Exception("New password is too short. It should be at least " . $this->getMinPasswordLength() . " characters"));
+                if(strlen($newPassword) > 8192) throw(new Exception("New password is too long. It should be less than 8192 characters"));
+                require_once(dirname(__FILE__).'/../core/stronghash/php-stronghash.php');
+                $hash=new Stronghash;
+
                 $hashedPw = $hash->hasher($newPassword);
-                $pwStore = json_encode($hasedPw);
+                $pwStore = json_encode($hashedPw);
                 # We don't need or want to recalculate a hardlink. The old
                 # salt isn't used anywhere where the old value is relevant.
-                $algo = $pw1['algo'];
-                $rounds = $pw1['rounds'];
+                $algo=$hashedPw['algo'];
+                $rounds=$hashedPw['rounds'];
+
                 # We need to update the "data" column with the $algo and
                 # $rounds data
                 $xml = new Xml();
                 $data = $currentUser['data'];
                 $backupData = $data;
-                $data = $xml->updateTag($data, '<rounds>', $this->sanitize($rounds));
-                $data = $xml->updateTag($data, '<algo>', $this->sanitize($algo));
+                $backupPassword = $currentUser[$this->pwcol];
+                $data = $xml->updateTag($data,"<rounds>",$this->sanitize($rounds));
+                $data = $xml->updateTag($data,"<algo>",$this->sanitize($algo));
+
 
                 /*
                  * We can't use writeToUser() since it requires user
                  * validation, and the second part of the update will always fail.
                  * So, we're going to manually construct the query here.
                  */
-                $query = 'UPDATE `'.$this->getTable().'` SET `'.$this->$pwcol.'`="'.$this->sanitize($pwStore).'", `data`="'.$data.'" WHERE `'.$this->userColumn."`='".$this->getUsername()."'";
-                $l = $this->openDB();
-                mysqli_query($l, 'BEGIN');
-                $r = mysqli_query($l, $query);
-                $finish_query = $r ? 'COMMIT' : 'ROLLBACK';
-                $callback = array('status' => $r,'action' => $finish_query,'new_password' => $newPassword);
-                if ($finish_query == 'ROLLBACK') {
-                    $callback['error'] = mysqli_error($l);
-                }
-                $r2 = mysqli_query($l, $finish_query);
-                $callback['status'] = $r && $r2;
+                $l=$this->openDB();
 
+                $query="UPDATE `".
+                      $this->getTable()."` SET `".
+                      $this->pwcol."`=\"".
+                      mysqli_real_escape_string($l, $pwStore)."\", `data`=\"".
+                      mysqli_real_escape_string($l,$data)."\" WHERE `".
+                      $this->userColumn."`='".
+                      $this->getUsername()."'";
+
+                mysqli_query($l,'BEGIN');
+                $r=mysqli_query($l,$query);
+                $finish_query= $r ? 'COMMIT':'ROLLBACK';
+                $callback = array('status'=>$r,'action'=>$finish_query,"new_password"=>$newPassword);
+                if($finish_query == 'ROLLBACK')
+                {
+                    $callback["error"] = mysqli_error($l);
+                }
+                $r2=mysqli_query($l,$finish_query);
+                $callback["status"] = $r && $r2;
+                if($callback["status"]) {
+                    $verifySetPw = $this->lookupUser($this->getUsername(), $newPassword, false);
+                    $callback["verification_data"] = $verifySetPw["status"];
+                    if(!$verifySetPw["status"]) {
+                        # verify setting with a lookup
+                        # if bad, revert to old
+                        # if reset, try again
+                        $revert = array();
+                        $query2="UPDATE `".
+                               $this->getTable()."` SET `".
+                               $this->pwcol."`=\"".
+                               $backupPassword."\", `data`=\"".
+                               $backupData."\" WHERE `".
+                               $this->userColumn."`='".
+                               $this->getUsername()."'";
+                        mysqli_query($l,'BEGIN');
+                        $r=mysqli_query($l,$query2);
+                        $finish_query= $r ? 'COMMIT':'ROLLBACK';
+                        $revert["action"] = $finish_query;
+                        if($finish_query == 'ROLLBACK')
+                        {
+                            $revert["error"] = mysqli_error($l);
+                        }
+                        $r2=mysqli_query($l,$finish_query);
+                        $revert["status"] = $r && $r2;
+                        $revert["debug"] = array(
+                            "new_data" => $data,
+                            "new_password" => $pwStore,
+                            "original_query" => $query,
+                            "restored_to" => $backupPassword,
+                            "old_data" => $backupData,
+                        );
+                        $callback["revert_status"] = $revert;
+                        $callback["original_status"] = $callback["status"];
+                        $callback["status"] = false;
+                    }
+                }
                 return $callback;
             }
         } catch (Exception $e) {
