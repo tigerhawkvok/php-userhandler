@@ -854,7 +854,7 @@ class UserFunctions extends DBHelper
       if ($result !== false) {
           $data = mysqli_fetch_assoc($result);
           if ($data[$this->userColumn] == $username) {
-              return array('status' => false,'error' => 'Your email is already registered. Please try again. Did you forget your password?');
+              return array('status' => false, "error"=>"Duplicate username", 'human_error' => 'Your email is already registered. Please try again. Did you forget your password?', "app_error_code" => 123);
           }
       }
       if (strlen($pw_in) < $this->getMinPasswordLength()) {
