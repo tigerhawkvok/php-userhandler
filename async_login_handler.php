@@ -110,6 +110,9 @@ if($print_login_state === true)
       case "finishpasswordreset":
         returnAjax(finishResetPassword($_REQUEST));
         break;
+      case "changepassword":
+          returnAjax(changePassword($_REQUEST));
+          break;
       default:
         returnAjax(getLoginState($_REQUEST,true));
       }
@@ -431,6 +434,27 @@ function finishResetPassword($get) {
       $ret = array("status"=>false,"error"=>$e->getMessage(),"human_error"=>"There was a server problem validating the reset. Please try again.");
   }
   return $ret;
+}
+
+function changePassword($get) {
+    /***
+     * Note that this function assumes that the preprocessor took care
+     * of verifying the new password was as intended. It does NOT
+     * check for a matched password.
+     ***/
+    try {
+        $u = new UserFunctions($get["username"]);
+        $passwordBlob = array (
+            "old" => $get["old_password"],
+            "new" => $get["new_password"]
+        );
+        $ret = $u->doUpdatePassword($passwordBlob);
+    }
+    catch (Exception $e) {
+        $ret = array("status"=>false,"error"=>$e->getMessage(),"human_error"=>"There was a problem updating your password (".$e->getMessage()."). Please try again.");
+    }
+    $ret["action"] = "changepassword";
+    return $ret;
 }
 
 ?>
