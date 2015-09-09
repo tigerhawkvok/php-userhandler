@@ -1,4 +1,4 @@
-var animateLoad, apiUri, beginChangePassword, byteCount, checkMatchPassword, checkPasswordLive, delay, doAsyncCreate, doAsyncLogin, doEmailCheck, doRemoveAccountAction, doTOTPRemove, doTOTPSubmit, evalRequirements, finishChangePassword, finishPasswordResetHandler, giveAltVerificationOptions, isBlank, isBool, isEmpty, isJson, isNull, isNumber, loadJS, makeTOTP, mapNewWindows, noSubmit, popupSecret, removeAccount, resetPassword, root, roundNumber, saveTOTP, showAdvancedOptions, showInstructions, stopLoad, stopLoadError, toFloat, toInt, toggleNewUserSubmit, uri, verifyPhone, _base, _base1,
+var animateLoad, apiUri, beginChangePassword, byteCount, checkMatchPassword, checkPasswordLive, delay, doAsyncCreate, doAsyncLogin, doEmailCheck, doRemoveAccountAction, doTOTPRemove, doTOTPSubmit, evalRequirements, finishChangePassword, finishPasswordResetHandler, giveAltVerificationOptions, isBlank, isBool, isEmpty, isJson, isNull, isNumber, loadJS, makeTOTP, mapNewWindows, noSubmit, popupSecret, removeAccount, resetPassword, root, roundNumber, saveTOTP, showAdvancedOptions, showInstructions, stopLoad, stopLoadError, toFloat, toInt, toggleNewUserSubmit, verifyPhone, _base, _base1,
   __slice = [].slice,
   __indexOf = [].indexOf || function(item) { for (var i = 0, l = this.length; i < l; i++) { if (i in this && this[i] === item) return i; } return -1; };
 
@@ -552,7 +552,19 @@ $(function() {
   }
 });
 
-delete url;
+if (typeof apiUri !== "object") {
+  apiUri = new Object();
+}
+
+apiUri.o = $.url();
+
+apiUri.urlString = window.location.origin + "/" + totpParams.subdirectory;
+
+apiUri.query = apiUri.o.attr("fragment");
+
+apiUri.targetApi = "async_login_handler.php";
+
+apiUri.apiTarget = apiUri.urlString + apiUri.targetApi;
 
 if (typeof window.passwords !== 'object') {
   window.passwords = new Object();
@@ -577,8 +589,7 @@ if (typeof window.totpParams !== 'object') {
 window.totpParams.popClass = "pop-panel";
 
 if (window.totpParams.home == null) {
-  uri = $.url();
-  window.totpParams.home = uri.attr('protocol') + '://' + uri.attr('host') + '/';
+  window.totpParams.home = apiUri.o.attr('protocol') + '://' + apiUri.o.attr('host') + '/';
 }
 
 if (window.totpParams.relative == null) {
@@ -594,18 +605,6 @@ window.totpParams.mainStylesheetPath = window.totpParams.relative + "css/otp_sty
 window.totpParams.popStylesheetPath = window.totpParams.relative + "css/otp_panels.css";
 
 window.totpParams.combinedStylesheetPath = window.totpParams.relative + "css/otp.min.css";
-
-apiUri = new Object();
-
-apiUri.o = $.url();
-
-apiUri.urlString = window.location.origin + "/" + totpParams.subdirectory;
-
-apiUri.query = uri.o.attr("fragment");
-
-apiUri.targetApi = "async_login_handler.php";
-
-apiUri.apiTarget = apiUri.urlString + apiUri.targetApi;
 
 delete url;
 
@@ -1619,13 +1618,36 @@ $(function() {
   });
   try {
     loadJS("https://maxcdn.bootstrapcdn.com/bootstrap/3.3.5/js/bootstrap.min.js", function() {
+      var e;
+      try {
+        if ($.url().param("showhelp") != null) {
+          showInstructions();
+        }
+      } catch (_error) {
+        e = _error;
+        delay(300, function() {
+          if ($.url().param("showhelp") != null) {
+            return showInstructions();
+          }
+        });
+      }
       $(".do-password-reset").unbind();
-      $("#reset-password-icon").tooltip();
+      try {
+        $("#reset-password-icon").tooltip();
+      } catch (_error) {
+        e = _error;
+        console.warn("Couldn't tooltip the forgotten password icon!");
+      }
       $(".do-password-reset").click(function() {
         resetPassword();
         return false;
       });
-      return $(".alert").alert();
+      try {
+        return $(".alert").alert();
+      } catch (_error) {
+        e = _error;
+        return console.warn("Couldn't bind alert!");
+      }
     });
   } catch (_error) {
     e = _error;

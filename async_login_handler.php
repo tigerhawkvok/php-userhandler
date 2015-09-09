@@ -32,6 +32,18 @@ if(!function_exists('elapsed'))
   }
 }
 
+if($allow_insecure_connections !== true) {
+    if (!(isset($_SERVER["HTTPS"]) && $_SERVER["HTTPS"] == "on"))
+    {
+        $data = array("status"=>false,"error"=>"This application only accepts SSL connections");
+        header('Cache-Control: no-cache, must-revalidate');
+        header('Expires: Mon, 26 Jul 1997 05:00:00 GMT');
+        header('Content-type: application/json');
+        print @json_encode($data,JSON_FORCE_OBJECT);
+        exit();
+    }
+}
+
 function returnAjax($data)
 {
   if(!is_array($data)) $data=array($data);
@@ -125,7 +137,23 @@ function getLoginState($get,$default=false)
   $s=$get['secret'];
   $id=$get['dblink'];
   $u=new UserFunctions();
-  return array("status"=>$u->validateUser($id,$conf,$s),'defaulted'=>$default,"login_url"=>$login_url);
+  $userDetail = $u->validateUser($id,$conf,$s,true);
+  $loginStatus = $userDetail["status"];
+  try
+  {
+      unset($userDetail["userdata"]["password"]);
+      unset($userDetail["userdata"]["secret"]);
+      unset($userDetail["userdata"]["pass_meta"]);
+      unset($userDetail["userdata"]["secdata"]);
+      unset($userDetail["userdata"]["emergency_code"]);
+      unset($userDetail["userdata"]["auth_key"]);
+  }
+  catch(Exception $e)
+  {
+      # Do nothing, that unset just failed
+      $userDetail = $e->getMessage();
+  }
+  return array("status"=>$loginStatus,'defaulted'=>$default,"login_url"=>$login_url,"detail"=>$userDetail);
 }
 
 function hasTOTP($get)
@@ -366,7 +394,7 @@ function getFromUser($get) {
           require_once(dirname(__FILE__).'/CONFIG.php');
           global $default_user_database,$default_user_table;
           $col=decode64($get['col']);
-          $l=openDB($default_user_database);
+          $l=$u->openDB($default_user_database);
           $query="SELECT $col FROM `$default_user_table` WHERE dblink='$id'";
           $r=mysqli_query($l,$query);
           $row=mysqli_fetch_row($r);
