@@ -897,7 +897,7 @@ else
     }
     $totpOverride .= $need_tfa && $require_two_factor ? "window.totpParams.tfaLock = true;\n":"window.totpParams.tfaLock = false;\n";
 
-    $deferredScriptBlock = "<script type='text/javascript' src='https://ajax.googleapis.com/ajax/libs/jquery/2.1.1/jquery.min.js'></script>
+    $deferredScriptBlock = "<script type='text/javascript' src='https://ajax.googleapis.com/ajax/libs/jquery/2.1.4/jquery.min.js'></script>
 <script type='text/javascript' src='".$relative_path."js/loadJQuery.min.js'></script>
 <script type='text/javascript'>
         if(typeof passwords != 'object') passwords = new Object();
@@ -909,11 +909,20 @@ else
 
 var loadLast = function () {
     try {
+        loadJS('".$relative_path."js/c.min.js',function() {
+            try {
+              $deferredJS
+            } catch(e) {
+              console.error(\"Couldn't load deferred calls\");
+            }
+          }, function(){
+            $('#totp_message').addClass('alert alert-danger').text('There was a problem loading this page. Please refresh and try again.');
+        });
         $deferredJS
     }
     catch (e)
     {
-        console.error(\"Couldn't load deferred calls\");
+        console.error(\"Couldn't load login scripts!\");
     }
 }
 </script>";

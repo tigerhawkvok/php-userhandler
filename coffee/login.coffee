@@ -130,6 +130,7 @@ doTOTPSubmit = (home = window.totpParams.home) ->
   # to async_login_handler.php , get the results and behave appropriately
   noSubmit()
   animateLoad()
+  $("#verify_totp_button").prop("disabled",true)
   code = $("#totp_code").val()
   user = $("#username").val()
   pass = $("#password").val()
@@ -146,8 +147,8 @@ doTOTPSubmit = (home = window.totpParams.home) ->
       try
         $("#totp_message")
         .text("Correct!")
-        .removeClass("error")
-        .addClass("good")
+        .removeClass("alert-danger")
+        .addClass("alert alert-success")
         i = 0
         $.each result["cookies"].raw_cookie, (key,val) ->
           try
@@ -166,7 +167,7 @@ doTOTPSubmit = (home = window.totpParams.home) ->
     else
       $("#totp_message")
       .text(result.human_error)
-      .addClass("error")
+      .addClass("alert alert-danger")
       $("#totp_code").val("") # Clear it
       $("#totp_code").focus()
       stopLoadError()
@@ -175,9 +176,13 @@ doTOTPSubmit = (home = window.totpParams.home) ->
     # Be smart about the failure
     $("#totp_message")
     .text("Failed to contact server. Please try again.")
-    .addClass("error")
+    .addClass("alert alert-danger")
     console.error("AJAX failure",apiUrlString  + "?" + args,result,status)
     stopLoadError()
+  totp.always ->
+    $("#verify_totp_button").prop("disabled",false)
+  false
+
 
 doTOTPRemove = ->
   # Remove 2FA
@@ -261,7 +266,7 @@ makeTOTP = ->
     <input type='hidden' id='username' name='username' value='#{user}'/>
     <input type='hidden' id='hash' name='hash' value='#{hash}'/>
     <input type='hidden' id='secret' name='secret' value='#{key}'/>
-    <button id='verify_totp_button' class='totpbutton'>Verify</button>
+    <button id='verify_totp_button' class='totpbutton btn btn-primary'>Verify</button>
   </fieldset>
 </form>"
       $("#totp_start").remove()
