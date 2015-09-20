@@ -92,7 +92,7 @@ function loadJQ(jq_path, i, libs) { //load jQuery if it isn't already
 }
 `
 
-loadJS = (src, callback = new Object(), doCallbackOnError = true) ->
+window.loadJS = (src, callback = new Object(), doCallbackOnError = true) ->
   ###
   # Load a new javascript file
   #
