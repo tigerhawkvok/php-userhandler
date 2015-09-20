@@ -917,6 +917,7 @@ var loadLast = function () {
             }
           }, function(){
             $('#totp_message').addClass('alert alert-danger').text('There was a problem loading this page. Please refresh and try again.');
+            console.error(\"The page couldn't load the primary scripts! This page may not function.\");
         });
         $deferredJS
     }
