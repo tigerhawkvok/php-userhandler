@@ -86,7 +86,7 @@ module.exports = (grunt) ->
           sourceMap: true
         files:
           "js/c.js":["coffee/core.coffee", "coffee/login.coffee"]
-          "js/loadJQuery.js": ["loadJQuery.coffee"]
+          "js/loadJQuery.js": ["coffee/loadJQuery.coffee"]
     phplint:
       scripts: ["handlers/login_functions.php","login.php"]
     phpcsfixer:

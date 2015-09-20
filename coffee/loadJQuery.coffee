@@ -4,18 +4,19 @@
 ###
 
 jqueryVersion = "2.1.4"
+jq_paths = [
+        "ajax.googleapis.com/ajax/libs/jquery/#{jqueryVersion}/jquery.min.js"
+        "ajax.aspnetcdn.com/ajax/jQuery/jquery-#{jqueryVersion}.min.js"
+        "https://code.jquery.com/jquery-#{jqueryVersion}.min.js"
+        "cdnjs.cloudflare.com/ajax/libs/jquery/#{jqueryVersion}/jquery.min.js"
+        "../bower_components/jquery/dist/jquery.min.js"
+    ]
+
 
 `
 function cascadeJQLoad(i) { // Use alternate CDNs where appropriate to load jQuery
     if (typeof(i) != "number") i = 0;
     // the actual paths to your jQuery CDNs. You should also have a local version here.
-    var jq_paths = [
-        "ajax.googleapis.com/ajax/libs/jquery/2.1.14/jquery.min.js",
-        "ajax.aspnetcdn.com/ajax/jQuery/jquery-2.1.4.min.js",
-        "https://code.jquery.com/jquery-2.1.4.min.js",
-        "cdnjs.cloudflare.com/ajax/libs/jquery/2.1.4/jquery.min.js",
-        "../bower_components/jquery/dist/jquery.min.js"
-    ];
     // Paths to your libraries that require jQuery, relative to this file
     var dependent_libraries = [
         "jquery.cookie.min.js",
@@ -165,7 +166,7 @@ loadJS = (src, callback = new Object(), doCallbackOnError = true) ->
 ###
 # The part that actually calls above
 ###
-
+`
 if (window.readyState) { //older microsoft browsers
     window.onreadystatechange = function() {
         if (this.readyState == 'complete' || this.readyState == 'loaded') {
@@ -175,3 +176,4 @@ if (window.readyState) { //older microsoft browsers
 } else { //modern browsers
     cascadeJQLoad();
 }
+`
