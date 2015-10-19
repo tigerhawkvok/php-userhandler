@@ -1018,14 +1018,18 @@ doAsyncLogin = (uri = "async_login_handler.php", respectRelativePath = true) ->
 
 doAsyncCreate = ->
   recaptchaResponse = grecaptcha.getResponse()
-  if recaptchaResponse.success isnt true
+  recaptchaTest = if typeof recaptchaResponse is "object" then recaptchaResponse.success isnt true else isNull(recaptchaResponse)
+  if recaptchaTest
     # Bad CAPTCHA
-    $("#createUser_submit").before("<p id='createUser_fail' class='bg-danger'>Sorry, your CAPTCHA was incorrect. Please try again.</p>")
+    $("#createUser_submit").before("<p id='createUser_fail' class='alert bg-danger'>Sorry, your CAPTCHA was incorrect. Please try again.</p>")
     grecaptcha.reset()
     return false
   $("#createUser_fail").remove()
   # Submit the user creation
-  false
+  console.info "Successfully called back the recaptcha response", recaptchaResponse
+  if typeof recaptchaResponse is "string"
+    $("#g-recaptcha-response").val recaptchaResponse
+  true
 
 
 ###########
@@ -1380,7 +1384,7 @@ beginChangePassword = ->
   </form>
   """
   $("#account_settings").after changePasswordForm
-  loadJS(window.totpParams.relative+"js/zxcvbn/zxcvbn.js")
+  loadJS(window.totpParams.relative+"js/zxcvbn/zxcvbn.min.js")
   checkFirstPassword = ->
     try
       checkPasswordLive("#do-change-password", "#new-password", "#new-password-confirm")
@@ -1465,7 +1469,7 @@ $ ->
   else
     selector = window.passwords.submitSelector
   if $("#password.create").exists()
-    loadJS(window.totpParams.relative+"js/zxcvbn/zxcvbn.js")
+    loadJS(window.totpParams.relative+"js/zxcvbn/zxcvbn.min.js")
     $("#password.create")
     .keyup ->
       checkPasswordLive()

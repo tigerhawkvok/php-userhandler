@@ -113,17 +113,19 @@ function loadJQ(jq_path, i, libs) { //load jQuery if it isn't already
      *                                    loading the script produces an error?
      *                                    If function, do it.
      */
-    if ($("script[src='" + src + "']").exists()) {
-      if (typeof callback === "function") {
-        try {
-          callback();
-        } catch (_error) {
-          e = _error;
-          console.error("Script is already loaded, but there was an error executing the callback function - " + e.message);
+    try {
+      if ($("script[src='" + src + "']").exists()) {
+        if (typeof callback === "function") {
+          try {
+            callback();
+          } catch (_error) {
+            e = _error;
+            console.error("Script is already loaded, but there was an error executing the callback function - " + e.message);
+          }
         }
+        return true;
       }
-      return true;
-    }
+    } catch (_error) {}
     s = document.createElement("script");
     s.setAttribute("src", src);
     s.setAttribute("async", "async");
