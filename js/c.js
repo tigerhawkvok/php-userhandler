@@ -1233,15 +1233,20 @@
   };
 
   doAsyncCreate = function() {
-    var recaptchaResponse;
+    var recaptchaResponse, recaptchaTest;
     recaptchaResponse = grecaptcha.getResponse();
-    if (recaptchaResponse.success !== true) {
-      $("#createUser_submit").before("<p id='createUser_fail' class='bg-danger'>Sorry, your CAPTCHA was incorrect. Please try again.</p>");
+    recaptchaTest = typeof recaptchaResponse === "object" ? recaptchaResponse.success !== true : isNull(recaptchaResponse);
+    if (recaptchaTest) {
+      $("#createUser_submit").before("<p id='createUser_fail' class='alert bg-danger'>Sorry, your CAPTCHA was incorrect. Please try again.</p>");
       grecaptcha.reset();
       return false;
     }
     $("#createUser_fail").remove();
-    return false;
+    console.info("Successfully called back the recaptcha response", recaptchaResponse);
+    if (typeof recaptchaResponse === "string") {
+      $("#g-recaptcha-response").val(recaptchaResponse);
+    }
+    return true;
   };
 
   resetPassword = function() {
@@ -1486,7 +1491,7 @@
     username = $.cookie(cookie);
     changePasswordForm = "<form class='change-password-form form-horizontal'>\n  <fieldset>\n    <legend>Change Password</legend>\n    <div class=\"form-group\">\n      <label for=\"old-password\" class=\"col-sm-2 control-label\">Old Password</label>\n      <div class=\"col-sm-4\">\n        <input type=\"password\" class=\"form-control old-password\" id=\"old-password\" placeholder=\"Old Password\" required=\"required\"/>\n      </div>\n    </div>\n    <div class=\"new-password-group\">\n      <div class=\"form-group\">\n        <label for=\"new-password\" class=\"col-sm-2 control-label\">New Password</label>\n        <div class=\"col-sm-4 has-feedback\">\n          <input type=\"password\" class=\"form-control new-password\" id=\"new-password\" placeholder=\"New Password\" required=\"required\"/>\n          <span id=\"feedback-status-1\"></span>\n        </div>\n      </div>\n      <div class=\"form-group\">\n        <label for=\"new-password-confirm\" class=\"col-sm-2 control-label\">Confirm New Password</label>\n        <div class=\"col-sm-4 has-feedback\">\n          <input type=\"password\" class=\"form-control new-password\" id=\"new-password-confirm\" placeholder=\"Confirm New Password\" required=\"required\"/>\n          <span id=\"feedback-status-2\"></span>\n        </div>\n      </div>\n    </div>\n    <div id=\"password_security\" class=\"pull-right col-sm-5 password-reqs hidden-xs\"></div>\n    <button id=\"do-change-password\" class=\"btn btn-primary col-sm-offset-2\" disabled>Change Password for<br/> " + username + "</button>\n  </fieldset>\n</form>";
     $("#account_settings").after(changePasswordForm);
-    loadJS(window.totpParams.relative + "js/zxcvbn/zxcvbn.js");
+    loadJS(window.totpParams.relative + "js/zxcvbn/zxcvbn.min.js");
     checkFirstPassword = function() {
       var e;
       try {
@@ -1571,7 +1576,7 @@
       selector = window.passwords.submitSelector;
     }
     if ($("#password.create").exists()) {
-      loadJS(window.totpParams.relative + "js/zxcvbn/zxcvbn.js");
+      loadJS(window.totpParams.relative + "js/zxcvbn/zxcvbn.min.js");
       $("#password.create").keyup(function() {
         return checkPasswordLive();
       }).change(function() {

@@ -105,14 +105,15 @@ window.loadJS = (src, callback = new Object(), doCallbackOnError = true) ->
   #                                    loading the script produces an error?
   #                                    If function, do it.
   ###
-  if $("script[src='#{src}']").exists()
-    if typeof callback is "function"
-      try
-        callback()
-      catch e
-        console.error "Script is already loaded, but there was an error executing the callback function - #{e.message}"
-    # Whether or not there was a callback, end the script
-    return true
+  try
+    if $("script[src='#{src}']").exists()
+      if typeof callback is "function"
+        try
+          callback()
+        catch e
+          console.error "Script is already loaded, but there was an error executing the callback function - #{e.message}"
+      # Whether or not there was a callback, end the script
+      return true
   # Create a new DOM selement
   s = document.createElement("script")
   # Set all the attributes. We can be a bit redundant about this
