@@ -819,7 +819,9 @@ class UserFunctions extends DBHelper
             $filename = $full_path.$file.'.png';
         }
         $svg = QRcode::svg($uri, false, QR_ECLEVEL_H, 8, 1);
-        QRcode::png($uri, $filename, QR_ECLEVEL_H, 8, 1);
+        if(function_exists("ImageCreate")) {
+            QRcode::png($uri, $filename, QR_ECLEVEL_H, 8, 1);
+        }
         $raw = base64_encode(file_get_contents($filename));
         $raw = 'data:image/png;base64,'.$raw;
         if (!$persistent) {
