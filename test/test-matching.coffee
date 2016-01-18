@@ -177,14 +177,14 @@ test 'dictionary matching', (t) ->
         dictionary_name: [name]
 
   # test the default dictionaries
-  matches = matching.dictionary_match 'rosebud'
-  patterns = ['ros', 'rose', 'rosebud', 'bud']
-  ijs = [[0,2], [0,3], [0,6], [4,6]]
+  matches = matching.dictionary_match 'wow'
+  patterns = ['wow']
+  ijs = [[0,2]]
   msg = "default dictionaries"
   check_matches msg, t, matches, 'dictionary', patterns, ijs,
     matched_word: patterns
-    rank: [13085, 65, 245, 786]
-    dictionary_name: ['surnames', 'female_names', 'passwords', 'male_names']
+    rank: [322]
+    dictionary_name: ['us_tv_and_film']
 
   matching.set_user_input_dictionary ['foo', 'bar']
   matches = matching.dictionary_match 'foobar'
@@ -441,24 +441,13 @@ test 'repeat matching', (t) ->
 
 test 'regex matching', (t) ->
   for [pattern, name] in [
-    ['aaa', 'alpha_lower']
-    ['a7c8D9', 'alphanumeric']
-    ['aAaA', 'alpha']
     ['1922', 'recent_year']
-    ['&@*#', 'symbols']
-    ['94113', 'digits']
+    ['2017', 'recent_year']
     ]
     matches = matching.regex_match pattern
     msg = "matches #{pattern} as a #{name} pattern"
     check_matches msg, t, matches, 'regex', [pattern], [[0, pattern.length - 1]],
       regex_name: [name]
-
-  password = 'a7c8D9vvv2015'
-  matches = matching.regex_match password
-  ijs = [[0, 12], [6, 8], [9, 12]]
-  msg = "matches multiple overlapping regex patterns"
-  check_matches msg, t, matches, 'regex', ['a7c8D9vvv2015', 'vvv', '2015'], ijs,
-    regex_name: ['alphanumeric', 'alpha_lower', 'recent_year']
   t.end()
 
 
