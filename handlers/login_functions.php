@@ -356,7 +356,7 @@ class UserFunctions extends DBHelper
     {
         return $this->username;
     }
-    
+
     public function getHardlink()
     {
         $link = $this->userlink;
@@ -1240,7 +1240,7 @@ class UserFunctions extends DBHelper
         return array('status' => false,'error' => 'Unsupported image upload method','app_error_code' => 120,'human_error' => 'The upload method you tried is not yet supported. Please try an alternate method.');
     }
 
-    public function validateUser($userid = null, $hash = null, $secret = null, $detail = false)
+    public function validateUser($userid = null, $hash = null, $secret = null, $detail = false, $permitRestricted = false)
     {
         /***
      * Returns true or false based on user validation
@@ -1258,6 +1258,8 @@ class UserFunctions extends DBHelper
      * @param string $hash Provide the final computed string to work with
      * @param string $secret Provide the cookie secret to work with
      * @param bool $detail Provide detailed returns
+     * @param bool $permitRestricted allow restricted
+     * profiles. Default false.
      * @return bool|array bool if $detail is false, array if $detail is true
      ***/
       $cookiekey = $this->domain.'_secret';
@@ -1283,6 +1285,17 @@ class UserFunctions extends DBHelper
             $pw_characters = json_decode($userdata[$this->pwColumn], true);
             $salt = $pw_characters['salt'];
             $userid = $userdata[$this->linkColumn];
+            # Is a restricted user valid?
+            if (isset($userdata["restricted_user"])) {
+                if(!$permitRestricted  && $userdata["restricted_user"] != false) {
+                    return array(
+                        "status" => false,
+                        "state" => false,
+                        "error" => "Unprivledged user ID in restricted context",
+                        "uid"=>$userid,
+                    );
+                }
+            }
 
             if (empty($hash) || empty($secret)) {
                 $secret = $_COOKIE[$cookiekey];
@@ -1361,7 +1374,7 @@ class UserFunctions extends DBHelper
          * @param
          * @return
          ***/
-        
+
         try {
             if (empty($username)) {
                 $userdata = $this->getUser();
@@ -1422,6 +1435,16 @@ class UserFunctions extends DBHelper
             $xml->setXml($userdata["name"]);
             $user_greet = $xml->getTagContents('<fname>');
             $user_full_name = $xml->getTagContents('<name>'); // for now
+
+            if(empty($user_greet)) {
+                try {
+                    $xml->setXml($userdata["name"]);
+                    $user_greet = $xml->getTagContents("<fname>");
+                    $user_full_name = $xml->getTagContents("<name");
+                } catch(Exception $e) {
+                    # Do nothing
+                }
+            }
 
             setcookie($cookieauth, $value, $expire);
             setcookie($cookiekey, $cookie_secret, $expire);
@@ -2251,7 +2274,7 @@ class UserFunctions extends DBHelper
      ***/
     # Look at the 'flag' item
     $target_user = $this->getUser(array($this->userColumn => $user_email));
-        $components = $this->getAuthTokens($target_user[$this->linkColumn]);
+    $components = $this->getAuthTokens($target_user[$this->linkColumn]);
     # Pull in the configuration files
     include dirname(__FILE__).'/../CONFIG.php';
         $url = !isset($login_url) ? 'login.php' : $login_url;
@@ -2259,6 +2282,8 @@ class UserFunctions extends DBHelper
         if (substr($rel_dir, -1) != '/' && !empty($rel_dir)) {
             $rel_dir = $rel_dir.'/';
         }
+        # Might want to slice out qualdomain from rel_dir if we're
+        # getting issues ....
         $link = $this->getQualifiedDomain().$rel_dir.$url.'?confirm=true&token='.$components['auth'].'&user='.$components['user'].'&key=';
     # get all the administrative users, and encrypt the key with their
     # user DB link
@@ -2512,12 +2537,12 @@ class UserFunctions extends DBHelper
     }
 
 
-    
+
     private function getUserSeed($seedColumn = "random_seed", $verbose = false) {
         # For legacy setups, make sure the random_seed column is there
         $r = $this->addColumn($seedColumn, "varchar(255)");
-        if ($r["status"] === true 
-            || 
+        if ($r["status"] === true
+            ||
             ($r["status"] === false && $r["error"] == "COLUMN_EXISTS")) {
             # Get the seed!
             $u = $this->getUser();
@@ -2543,17 +2568,17 @@ class UserFunctions extends DBHelper
         if($verbose) return "NOT_EXIST_CANT_CREATE";
         return false;
     }
-    
-    
-    
+
+
+
     private static function getPreferredCipherMethod() {
         # TODO method to determine best cipher method
         $methods = openssl_get_cipher_methods();
         return "AES-256-CBC-HMAC-SHA1";
     }
 
-    
-    
+
+
     public static function encryptThis($key, $string, $iv = "")
     {
         /***
