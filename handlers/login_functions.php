@@ -115,6 +115,7 @@ class UserFunctions extends DBHelper
         $this->twilio_number = $twilio_number;
         $this->site = $site_name;
         $this->appKeyColumn = $app_column;
+        $this->userlink = null;
 
         $proto = 'http';
         if (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] == 'on') {
@@ -326,7 +327,8 @@ class UserFunctions extends DBHelper
         $col = $this->userColumn;
         } elseif (!empty($_COOKIE[$ucookielink])) {
             # See if we can get this from the cookies
-        $user_id = $_COOKIE[$ucookielink];
+            $user_id = $_COOKIE[$ucookielink];
+            $this->userlink = $user_id;
             $col = $this->linkColumn;
         }
 
@@ -353,6 +355,21 @@ class UserFunctions extends DBHelper
     public function getUsername()
     {
         return $this->username;
+    }
+
+    public function getHardlink()
+    {
+        $link = $this->userlink;
+        # Has this been defined yet?
+        // if (empty($link)) {
+        //     try {
+        //         $this->getUser();
+        //         $link = $this->userlink;
+        //     } catch(Exception $e) {
+        //         $link = null;
+        //     }
+        // }
+        return $link;
     }
 
     public function getPhone()
@@ -802,7 +819,9 @@ class UserFunctions extends DBHelper
             $filename = $full_path.$file.'.png';
         }
         $svg = QRcode::svg($uri, false, QR_ECLEVEL_H, 8, 1);
-        QRcode::png($uri, $filename, QR_ECLEVEL_H, 8, 1);
+        if(function_exists("ImageCreate")) {
+            QRcode::png($uri, $filename, QR_ECLEVEL_H, 8, 1);
+        }
         $raw = base64_encode(file_get_contents($filename));
         $raw = 'data:image/png;base64,'.$raw;
         if (!$persistent) {
@@ -1151,7 +1170,7 @@ class UserFunctions extends DBHelper
     public function getUserPicture($id = null, $path = null, $extra_types_array = null)
     {
         if (empty($id)) {
-            $id = $this->userlink;
+            $id = $this->getHardlink();
         }
         if (empty($path)) {
             $path = $this->picture_path;
@@ -1198,9 +1217,9 @@ class UserFunctions extends DBHelper
             } else {
                 return array('status' => false, 'error' => 'Could not parse POST','human_error' => 'There was an error uploading your image','app_error_code' => 118);
             }
-            $imgUri = $path.$this->userlink.'.'.$extension;
-            $imgSmallUri = $path.$this->userlink.'-sm.'.$extension;
-            $imgTinyUri = $path.$this->userlink.'-xs.'.$extension;
+            $imgUri = $path.$this->getHardlink().'.'.$extension;
+            $imgSmallUri = $path.$this->getHardlink().'-sm.'.$extension;
+            $imgTinyUri = $path.$this->getHardlink().'-xs.'.$extension;
             try {
                 file_put_contents($imgUri, base64_decode($image));
             } catch (Exception $e) {
@@ -1221,7 +1240,7 @@ class UserFunctions extends DBHelper
         return array('status' => false,'error' => 'Unsupported image upload method','app_error_code' => 120,'human_error' => 'The upload method you tried is not yet supported. Please try an alternate method.');
     }
 
-    public function validateUser($userid = null, $hash = null, $secret = null, $detail = false)
+    public function validateUser($userid = null, $hash = null, $secret = null, $detail = false, $permitRestricted = false)
     {
         /***
      * Returns true or false based on user validation
@@ -1239,6 +1258,8 @@ class UserFunctions extends DBHelper
      * @param string $hash Provide the final computed string to work with
      * @param string $secret Provide the cookie secret to work with
      * @param bool $detail Provide detailed returns
+     * @param bool $permitRestricted allow restricted
+     * profiles. Default false.
      * @return bool|array bool if $detail is false, array if $detail is true
      ***/
       $cookiekey = $this->domain.'_secret';
@@ -1264,6 +1285,17 @@ class UserFunctions extends DBHelper
             $pw_characters = json_decode($userdata[$this->pwColumn], true);
             $salt = $pw_characters['salt'];
             $userid = $userdata[$this->linkColumn];
+            # Is a restricted user valid?
+            if (isset($userdata["restricted_user"])) {
+                if(!$permitRestricted  && $userdata["restricted_user"] != false) {
+                    return array(
+                        "status" => false,
+                        "state" => false,
+                        "error" => "Unprivledged user ID in restricted context",
+                        "uid"=>$userid,
+                    );
+                }
+            }
 
             if (empty($hash) || empty($secret)) {
                 $secret = $_COOKIE[$cookiekey];
@@ -1307,7 +1339,7 @@ class UserFunctions extends DBHelper
                 $userdata = null;
             }
             if ($detail) {
-                return array('state' => self::strbool($state),'status' => $state,'uid' => $userid,'salt' => $salt,'calc_conf' => $conf,'basis_conf' => $hash,'from_cookie' => self::strbool($from_cookie),'got_user_pass_info' => is_array($pw_characters),'got_userdata' => is_array($userdata),'userdata' => $userdata,'source' => $value_create,'error' => $error,'cookie_checked' => $cookiekey);
+                return array('state' => self::strbool($state),'status' => $state,'uid' => $userid,'salt' => $salt,'calc_conf' => $conf,'basis_conf' => $hash,'from_cookie' => self::strbool($from_cookie),'got_user_pass_info' => is_array($pw_characters),'got_userdata' => is_array($userdata),'userdata' => $userdata,'source' => $value_create,'error' => $error,'cookie_checked' => $cookiekey, "iv" => $this->getUserSeed());
             }
 
             return $state;
@@ -1342,7 +1374,7 @@ class UserFunctions extends DBHelper
          * @param
          * @return
          ***/
-        
+
         try {
             if (empty($username)) {
                 $userdata = $this->getUser();
@@ -1403,6 +1435,16 @@ class UserFunctions extends DBHelper
             $xml->setXml($userdata["name"]);
             $user_greet = $xml->getTagContents('<fname>');
             $user_full_name = $xml->getTagContents('<name>'); // for now
+
+            if(empty($user_greet)) {
+                try {
+                    $xml->setXml($userdata["name"]);
+                    $user_greet = $xml->getTagContents("<fname>");
+                    $user_full_name = $xml->getTagContents("<name");
+                } catch(Exception $e) {
+                    # Do nothing
+                }
+            }
 
             setcookie($cookieauth, $value, $expire);
             setcookie($cookiekey, $cookie_secret, $expire);
@@ -1475,7 +1517,7 @@ class UserFunctions extends DBHelper
         if ($phoneStatus['is_good'] === true) {
             # The phone is good and the user is good, do the device mapping
       $l = $this->openDB();
-            $query = 'SELECT `'.$this->appKeyColumn.'` FROM `'.$this->getTable().'` WHERE `'.$this->linkColumn."`='".$this->userlink."'";
+            $query = 'SELECT `'.$this->appKeyColumn.'` FROM `'.$this->getTable().'` WHERE `'.$this->linkColumn."`='".$this->getHardlink()."'";
             $r = mysqli_query($l, $query);
             if ($r === false) {
                 return array('status' => false,'error' => mysqli_error($l),'human_error' => "The database couldn't read the device list",'query' => $query,'app_error_code' => 113);
@@ -1512,7 +1554,7 @@ class UserFunctions extends DBHelper
             }
             $status['secret'] = $server_secret;
       //$status["key"] = "";
-      $status[$this->linkColumn] = $this->userlink;
+      $status[$this->linkColumn] = $this->getHardlink();
             $status['id_name'] = $this->linkColumn;
 
             return $status;
@@ -1540,7 +1582,7 @@ class UserFunctions extends DBHelper
             return array('status' => false,'human_error' => "We couldn't verify the application. Please try again, or contact support",'error' => $e->getMessage(),'app_error_code' => 100);
         }
         $l = $this->openDB();
-        $query = 'SELECT `'.$this->appKeyColumn.'` FROM `'.$this->getTable().'` WHERE `'.$this->linkColumn."`='".$this->userlink."'";
+        $query = 'SELECT `'.$this->appKeyColumn.'` FROM `'.$this->getTable().'` WHERE `'.$this->linkColumn."`='".$this->getHardlink()."'";
         $r = mysqli_query($l, $query);
         if ($r === false) {
             # The query failed
@@ -1570,7 +1612,7 @@ class UserFunctions extends DBHelper
       $computedToken = sha1($verify_data['auth_prepend'].$secret.$verify_data['auth_postpend']);
         $providedToken = $verify_data['authorization_token'];
         if ($computedToken === $providedToken) {
-            return array('status' => true,'data' => $userdata,'userid' => $this->userlink,'validation_tokens' => $this->createCookieTokens());
+            return array('status' => true,'data' => $userdata,'userid' => $this->getHardlink(),'validation_tokens' => $this->createCookieTokens());
         } else {
             return array('status' => false,'human_error' => 'Invalid credentials. Please log out and log back in.','error' => 'Invalid credentials','app_error_code' => 106);
         }
@@ -2232,7 +2274,7 @@ class UserFunctions extends DBHelper
      ***/
     # Look at the 'flag' item
     $target_user = $this->getUser(array($this->userColumn => $user_email));
-        $components = $this->getAuthTokens($target_user[$this->linkColumn]);
+    $components = $this->getAuthTokens($target_user[$this->linkColumn]);
     # Pull in the configuration files
     include dirname(__FILE__).'/../CONFIG.php';
         $url = !isset($login_url) ? 'login.php' : $login_url;
@@ -2240,6 +2282,8 @@ class UserFunctions extends DBHelper
         if (substr($rel_dir, -1) != '/' && !empty($rel_dir)) {
             $rel_dir = $rel_dir.'/';
         }
+        # Might want to slice out qualdomain from rel_dir if we're
+        # getting issues ....
         $link = $this->getQualifiedDomain().$rel_dir.$url.'?confirm=true&token='.$components['auth'].'&user='.$components['user'].'&key=';
     # get all the administrative users, and encrypt the key with their
     # user DB link
@@ -2493,11 +2537,47 @@ class UserFunctions extends DBHelper
     }
 
 
+
+    private function getUserSeed($seedColumn = "random_seed", $verbose = false) {
+        # For legacy setups, make sure the random_seed column is there
+        $r = $this->addColumn($seedColumn, "varchar(255)");
+        if ($r["status"] === true
+            ||
+            ($r["status"] === false && $r["error"] == "COLUMN_EXISTS")) {
+            # Get the seed!
+            $u = $this->getUser();
+            if(!empty($u[$seedColumn])) return $u[$seedColumn];
+            $criteria = array($this->linkColumn => $this->getHardlink());
+            $seed = Stronghash::createSalt() . Stronghash::genUnique(96);
+            $entry = array(
+                $seedColumn => $seed
+            );
+            try {
+                $r = $this->updateEntry($entry, $criteria);
+                if($r !== true) {
+                    if($verbose) return $r;
+                    return false;
+                }
+                return $seed;
+            } catch(Exception $e) {
+                if($verbose) return $e->getMessage();
+                return false;
+            }
+        }
+        # No column, and couldn't create it
+        if($verbose) return "NOT_EXIST_CANT_CREATE";
+        return false;
+    }
+
+
+
     private static function getPreferredCipherMethod() {
         # TODO method to determine best cipher method
         $methods = openssl_get_cipher_methods();
         return "AES-256-CBC-HMAC-SHA1";
     }
+
+
 
     public static function encryptThis($key, $string, $iv = "")
     {

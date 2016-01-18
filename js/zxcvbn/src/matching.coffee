@@ -43,22 +43,13 @@ L33T_TABLE =
   z: ['2']
 
 REGEXEN =
-  alphanumeric: /[a-zA-Z0-9]{2,}/g
+  alpha_lower:  /[A-Z]{2,}/g
+  alpha_upper:  /[a-z]{2,}/g
   alpha:        /[a-zA-Z]{2,}/g
-  alpha_lower:  /[a-z]{2,}/g
-  alpha_upper:  /[A-Z]{2,}/g
+  alphanumeric: /[a-zA-Z0-9]{2,}/g
   digits:       /\d{2,}/g
   symbols:      /[\W_]{2,}/g # includes non-latin unicode chars
   recent_year:  /19\d\d|200\d|201\d/g
-
-REGEX_PRECEDENCE =
-  alphanumeric: 0
-  alpha:        1
-  alpha_lower:  2
-  alpha_upper:  2
-  digits:       2
-  symbols:      2
-  recent_year:  3
 
 DATE_MAX_YEAR = 2050
 DATE_MIN_YEAR = 1000
@@ -105,7 +96,6 @@ matching =
     matches = []
     matchers = [
       @dictionary_match
-      @reverse_dictionary_match
       @l33t_match
       @spatial_match
       @repeat_match
@@ -140,20 +130,6 @@ matching =
               matched_word: word
               rank: rank
               dictionary_name: dictionary_name
-              reversed: false
-    @sorted matches
-
-  reverse_dictionary_match: (password, _ranked_dictionaries = RANKED_DICTIONARIES) ->
-    reversed_password = password.split('').reverse().join('')
-    matches = @dictionary_match reversed_password, _ranked_dictionaries
-    for match in matches
-      match.token = match.token.split('').reverse().join('') # reverse back
-      match.reversed = true
-      # map coordinates back to original string
-      [match.i, match.j] = [
-        password.length - 1 - match.j
-        password.length - 1 - match.i
-      ]
     @sorted matches
 
   set_user_input_dictionary: (ordered_list) ->
@@ -242,11 +218,7 @@ matching =
         match.sub = match_sub
         match.sub_display = ("#{k} -> #{v}" for k,v of match_sub).join(', ')
         matches.push match
-    @sorted matches.filter (match) ->
-      # filter single-character l33t matches to reduce noise.
-      # otherwise '1' matches 'i', '4' matches 'a', both very common English words
-      # with low dictionary rank.
-      match.token.length > 1
+    @sorted matches
 
   # ------------------------------------------------------------------------------
   # spatial match (qwerty/dvorak/keypad) -----------------------------------------
@@ -317,57 +289,34 @@ matching =
     matches
 
   #-------------------------------------------------------------------------------
-  # repeats (aaa, abcabcabc) and sequences (abcdef) ------------------------------
+  # repeats (aaa) and sequences (abcdef) -----------------------------------------
   #-------------------------------------------------------------------------------
 
   repeat_match: (password) ->
+    min_repeat_length = 3 # TODO allow 2-char repeats?
     matches = []
-    greedy = /(.+)\1+/g
-    lazy = /(.+?)\1+/g
-    lazy_anchored = /^(.+?)\1+$/
-    lastIndex = 0
-    while lastIndex < password.length
-      greedy.lastIndex = lazy.lastIndex = lastIndex
-      greedy_match = greedy.exec password
-      lazy_match = lazy.exec password
-      break unless greedy_match?
-      if greedy_match[0].length > lazy_match[0].length
-        # greedy beats lazy for 'aabaab'
-        #   greedy: [aabaab, aab]
-        #   lazy:   [aa,     a]
-        match = greedy_match
-        # greedy's repeated string might itself be repeated, eg.
-        # aabaab in aabaabaabaab.
-        # run an anchored lazy match on greedy's repeated string
-        # to find the shortest repeated string
-        base_token = lazy_anchored.exec(match[0])[1]
-      else
-        # lazy beats greedy for 'aaaaa'
-        #   greedy: [aaaa,  aa]
-        #   lazy:   [aaaaa, a]
-        match = lazy_match
-        base_token = match[1]
-      [i, j] = [match.index, match.index + match[0].length - 1]
-      # recursively match and score the base string
-      base_analysis = scoring.most_guessable_match_sequence(
-        base_token
-        @omnimatch base_token
-      )
-      base_matches = base_analysis.match_sequence
-      base_guesses = base_analysis.guesses
-      matches.push
-        pattern: 'repeat'
-        i: i
-        j: j
-        token: match[0]
-        base_token: base_token
-        base_guesses: base_guesses
-        base_matches: base_matches
-        repeat_count: match[0].length / base_token.length
-      lastIndex = j + 1
-    matches
+    i = 0
+    while i < password.length
+      j = i + 1
+      loop
+        [prev_char, cur_char] = password[j-1..j]
+        if password.charAt(j-1) == password.charAt(j)
+          j += 1
+        else
+          j -= 1
+          if j - i + 1 >= min_repeat_length
+            matches.push
+              pattern: 'repeat'
+              i: i
+              j: j
+              token: password[i..j]
+              repeated_char: password.charAt(i)
+          break
+      i = j + 1
+    @sorted matches
 
   sequence_match: (password) ->
+    min_sequence_length = 3 # TODO allow 2-char sequences?
     matches = []
     for sequence_name, sequence of SEQUENCES
       for direction in [1, -1]
@@ -386,7 +335,7 @@ matching =
             j += 1
             sequence_position = next_sequence_position
           j -= 1
-          if j - i + 1 > 1
+          if j - i + 1 >= min_sequence_length
             matches.push
               pattern: 'sequence'
               i: i
@@ -415,21 +364,7 @@ matching =
           j: rx_match.index + rx_match[0].length - 1
           regex_name: name
           regex_match: rx_match
-    # currently, match list includes a bunch of redundancies:
-    # ex for every alpha_lower match, also an alpha and alphanumeric match of the same [i,j].
-    # ex for every recent_year match, also an alphanumeric match and digits match.
-    # use precedence to filter these redundancies out.
-    precedence_map = {} # maps from 'i-j' to current highest precedence
-    get_key = (match) -> "#{match.i}-#{match.j}"
-    for match in matches
-      key = get_key match
-      precedence = REGEX_PRECEDENCE[match.regex_name]
-      if key of precedence_map
-        highest_precedence = precedence_map[key]
-        continue if highest_precedence >= precedence
-      precedence_map[key] = precedence
-    @sorted matches.filter (match) ->
-      precedence_map[get_key(match)] == REGEX_PRECEDENCE[match.regex_name]
+    @sorted matches
 
   #-------------------------------------------------------------------------------
   # date matching ----------------------------------------------------------------
@@ -482,7 +417,7 @@ matching =
           candidates.push dmy if dmy?
         continue unless candidates.length > 0
         # at this point: different possible dmy mappings for the same i,j substring.
-        # match the candidate date that likely takes the fewest guesses: a year closest to 2000.
+        # match the candidate date that has smallest entropy: a year closest to 2000.
         # (scoring.REFERENCE_YEAR).
         #
         # ie, considering '111504', prefer 11-15-04 to 1-1-1504
@@ -534,14 +469,16 @@ matching =
     # 5(!) other date matches: 15_06_04, 5_06_04, ..., even 2015 (matched as 5/1/2020)
     #
     # to reduce noise, remove date matches that are strict substrings of others
-    @sorted matches.filter (match) ->
+    filtered_matches = []
+    for match in matches
       is_submatch = false
       for other_match in matches
         continue if match is other_match
         if other_match.i <= match.i and other_match.j >= match.j
           is_submatch = true
           break
-      not is_submatch
+      filtered_matches.push match unless is_submatch
+    @sorted filtered_matches
 
   map_ints_to_dmy: (ints) ->
     # given a 3-tuple, discard if:
