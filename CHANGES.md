@@ -1,6 +1,42 @@
 twilio-php Changelog
 ====================
 
+Version 4.9.0
+-------------
+Released December 18, 2015
+
+- Add IP Messaging capability
+
+Version 4.8.1
+-------------
+Released December 8, 2015
+
+- Fix issue with empty grant encoding
+
+Version 4.8.0
+-------------
+Released December 8, 2015
+
+- Update access tokens to support optional NBF
+
+Version 4.7.0
+-------------
+Released December 3, 2015
+
+- Add access tokens
+
+Version 4.6.1
+-------------
+Released November 9, 2015
+
+- Secured Signature header validation from timing attack
+
+Version 4.6.0
+-------------
+Released October 30, 2015
+
+- Add support for Keys
+
 Version 4.4.0
 -------------
 Released September 21, 2015
