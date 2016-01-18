@@ -1,6 +1,6 @@
 {
     "name": "php-userhandler",
-    "version": "0.9.12",
+    "version": "0.15.1",
     "description": "Self-Contained PHP user handler",
     "main": "login.php",
     "dependencies": {
