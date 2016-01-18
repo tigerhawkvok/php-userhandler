@@ -88,10 +88,10 @@ module.exports = (grunt) ->
           "js/c.js":["coffee/core.coffee", "coffee/login.coffee"]
           "js/loadJQuery.js": ["coffee/loadJQuery.coffee"]
     phplint:
-      scripts: ["handlers/login_functions.php","login.php"]
+      scripts: ["handlers/login_functions.php","login.php","*.php"]
     phpcsfixer:
       app:
-        dir: ["handlers/login_functions.php"]
+        dir: ["handlers/login_functions.php", "*.php"]
       options:
         ignoreExitCode: true
         verbose: true
