@@ -91,7 +91,7 @@ module.exports = (grunt) ->
       scripts: ["handlers/login_functions.php","login.php","*.php"]
     phpcsfixer:
       app:
-        dir: ["handlers/login_functions.php","./*.php"]
+        dir: ["handlers/login_functions.php","async_login_handler.php","app_handlers.php", "api.php", "app_api.php"]
       options:
         ignoreExitCode: true
         verbose: true
