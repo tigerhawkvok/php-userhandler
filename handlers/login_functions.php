@@ -167,7 +167,6 @@ class UserFunctions extends DBHelper
    * Helper functions
    ***/
 
-
   private function getSiteKey()
   {
       return $this->siteKey;
@@ -188,12 +187,15 @@ class UserFunctions extends DBHelper
     {
         return $this->shortUrl;
     }
-    private function getMinPasswordLength() {
-        if(!is_numeric($this->minPasswordLength)) {
+    private function getMinPasswordLength()
+    {
+        if (!is_numeric($this->minPasswordLength)) {
             $this->minPasswordLength = 8;
         }
         $length = intval($this->minPasswordLength);
-        return $length; }
+
+        return $length;
+    }
     private function getThresholdLength()
     {
         return $this->thresholdLength;
@@ -588,7 +590,9 @@ class UserFunctions extends DBHelper
             return array('status' => false,'error' => '2FA has already been enabled for this user.','human_error' => "You've already enabled 2-factor authentication.",'username' => $this->username);
         }
         try {
-            if (!class_exists('Stronghash')) require_once dirname(__FILE__).'/../core/stronghash/php-stronghash.php';
+            if (!class_exists('Stronghash')) {
+                require_once dirname(__FILE__).'/../core/stronghash/php-stronghash.php';
+            }
             $salt = Stronghash::createSalt();
             require_once dirname(__FILE__).'/../base32/src/Base32/Base32.php';
             $secret = Base32::encode($salt);
@@ -664,7 +668,9 @@ class UserFunctions extends DBHelper
         $userdata = $this->getUser();
         $secret = $userdata[$this->tmpColumn];
         $query = 'UPDATE `'.$this->getTable().'` SET `'.$this->totpColumn."`='$secret', `".$this->tmpColumn."`=''  WHERE `".$this->userColumn."`='".$this->username."'";
-        if (!class_exists('Stronghash')) require_once dirname(__FILE__).'/../core/stronghash/php-stronghash.php';
+        if (!class_exists('Stronghash')) {
+            require_once dirname(__FILE__).'/../core/stronghash/php-stronghash.php';
+        }
         $backup = Stronghash::createSalt();
         $backup_store = hash('sha512', $backup);
         $query2 = 'UPDATE `'.$this->getTable().'` SET `'.$this->totpBackup."`='$backup_store' WHERE `".$this->userColumn."`='".$this->username."'";
@@ -790,7 +796,9 @@ class UserFunctions extends DBHelper
      ***/
     try {
         require_once dirname(__FILE__).'/../qr/qrlib.php';
-        if (!class_exists('Stronghash')) require_once dirname(__FILE__).'/../core/stronghash/php-stronghash.php';
+        if (!class_exists('Stronghash')) {
+            require_once dirname(__FILE__).'/../core/stronghash/php-stronghash.php';
+        }
         $salt = Stronghash::createSalt();
         $persistent = !empty($data_path);
         if (!$persistent) {
@@ -819,7 +827,9 @@ class UserFunctions extends DBHelper
             $filename = $full_path.$file.'.png';
         }
         $svg = QRcode::svg($uri, false, QR_ECLEVEL_H, 8, 1);
-        QRcode::png($uri, $filename, QR_ECLEVEL_H, 8, 1);
+        if (function_exists('ImageCreate')) {
+            QRcode::png($uri, $filename, QR_ECLEVEL_H, 8, 1);
+        }
         $raw = base64_encode(file_get_contents($filename));
         $raw = 'data:image/png;base64,'.$raw;
         if (!$persistent) {
@@ -828,6 +838,7 @@ class UserFunctions extends DBHelper
         # As a final option, get a URL fallback
         # https://developers.google.com/chart/infographics/docs/qr_codes?csw=1
         $url = 'https://chart.googleapis.com/chart?cht=qr&chs=500x500&chld=H&chl='.$uri;
+
         return array('status' => true,'uri' => $uri,'svg' => $svg,'raw' => $raw,'url' => $url);
     } catch (Exception $e) {
         return array('status' => false,'human_error' => 'Unable to generate QR code','error' => $e->getMessage(),'uri' => $uri,'identifier' => $identifier,'persistent' => $persistent);
@@ -875,14 +886,16 @@ class UserFunctions extends DBHelper
       if ($result !== false) {
           $data = mysqli_fetch_assoc($result);
           if ($data[$this->userColumn] == $username) {
-              return array('status' => false, "error"=>"Duplicate username", 'human_error' => 'Your email is already registered. Please try again. Did you forget your password?', "app_error_code" => 123);
+              return array('status' => false, 'error' => 'Duplicate username', 'human_error' => 'Your email is already registered. Please try again. Did you forget your password?', 'app_error_code' => 123);
           }
       }
       if (strlen($pw_in) < $this->getMinPasswordLength()) {
           return array('status' => false,'error' => 'Your password is too short. Please try again.');
       }
     // Complexity checks here, if not relegated to JS ...
-      if (!class_exists('Stronghash')) require_once dirname(__FILE__).'/../core/stronghash/php-stronghash.php';
+      if (!class_exists('Stronghash')) {
+          require_once dirname(__FILE__).'/../core/stronghash/php-stronghash.php';
+      }
       $hash = new Stronghash();
       $creation = self::microtime_float();
       $pw1 = $hash->hasher($pw_in);
@@ -909,7 +922,7 @@ class UserFunctions extends DBHelper
           case $this->pwColumn:
             $store[$key] = $pw_store; # Generated
             break;
-          case "salt":
+          case 'salt':
             $store[$key] = $salt; # Generated
           case 'creation':
             $store[$key] = $creation; # Generated
@@ -979,13 +992,12 @@ class UserFunctions extends DBHelper
               /*
                 , "lookup_result" => $res, "storage_passed" => $store,
                */
-              return array('status' => false,'error' => 'Failure: Unable to verify user creation', "human_error" => "Ther was an error confirming creation of your user. Please try again. Your user may have been partially created already.",'add' => $test_res, 'userdata' => $userdata);
+              return array('status' => false,'error' => 'Failure: Unable to verify user creation', 'human_error' => 'Ther was an error confirming creation of your user. Please try again. Your user may have been partially created already.','add' => $test_res, 'userdata' => $userdata);
           }
       } else {
-          return array('status' => false,'error' => 'Failure: unknown database error. Your user was unable to be saved.', "storage_data" => $store, "field_data" => $fields, "add_result" => $test_res);
+          return array('status' => false,'error' => 'Failure: unknown database error. Your user was unable to be saved.', 'storage_data' => $store, 'field_data' => $fields, 'add_result' => $test_res);
       }
   }
-
 
     public function lookupUser($username, $pw, $return = true, $totp_code = false, $override = false)
     {
@@ -1013,7 +1025,9 @@ class UserFunctions extends DBHelper
                 $userdata = mysqli_fetch_assoc($result);
                 if (is_numeric($userdata['id'])) {
                     # check password
-                    if (!class_exists('Stronghash')) require_once dirname(__FILE__).'/../core/stronghash/php-stronghash.php';
+                    if (!class_exists('Stronghash')) {
+                        require_once dirname(__FILE__).'/../core/stronghash/php-stronghash.php';
+                    }
                     $hash = new Stronghash();
                     $data = json_decode($userdata[$this->pwColumn], true);
                     $original_data = $data;
@@ -1021,24 +1035,22 @@ class UserFunctions extends DBHelper
                     if (is_numeric($totp_code)) {
                         $pw = $this->decryptWithStoredKey($pw);
                     }
-                    if(empty($data) || empty($data['salt']))
-                    {
-                        try
-                        {
+                    if (empty($data) || empty($data['salt'])) {
+                        try {
                             # Try legacy
-                            $xml->setXml($userdata["data"]);
-                            $data['algo'] = $xml->getTagContents("<algo>");
-                            $data['rounds'] = $xml->getTagContents("<rounds>");
+                            $xml->setXml($userdata['data']);
+                            $data['algo'] = $xml->getTagContents('<algo>');
+                            $data['rounds'] = $xml->getTagContents('<rounds>');
                             /* Default rounds for sha512 */
-                            if(empty($data['rounds'])) $data['rounds'] = 10000;
+                            if (empty($data['rounds'])) {
+                                $data['rounds'] = 10000;
+                            }
                             $data['salt'] = null;
-                            $data['hash']= $userdata['pass'];
-                            $data["legacy"] = true;
-                            $pw = $userdata['salt'] . $pw . $userdata['creation'];
-                        }
-                        catch (Exception $e)
-                        {
-                            return array(false,"message"=> "No valid password data");
+                            $data['hash'] = $userdata['pass'];
+                            $data['legacy'] = true;
+                            $pw = $userdata['salt'].$pw.$userdata['creation'];
+                        } catch (Exception $e) {
+                            return array(false,'message' => 'No valid password data');
                         }
                     }
                     if ($hash->verifyHash($pw, $data)) {
@@ -1097,6 +1109,7 @@ class UserFunctions extends DBHelper
                                 return array(true,$decname,'status' => true);
                             } else {
                                 $returning = array(true,$userdata,'status' => true,'data' => $userdata);
+
                                 return $returning;
                             }
                         }
@@ -1284,6 +1297,17 @@ class UserFunctions extends DBHelper
             $pw_characters = json_decode($userdata[$this->pwColumn], true);
             $salt = $pw_characters['salt'];
             $userid = $userdata[$this->linkColumn];
+            # Is a restricted user valid?
+            if (isset($userdata['restricted_user'])) {
+                if (!$permitRestricted  && $userdata['restricted_user'] != false) {
+                    return array(
+                        'status' => false,
+                        'state' => false,
+                        'error' => 'Unprivledged user ID in restricted context',
+                        'uid' => $userid,
+                    );
+                }
+            }
 
             if (empty($hash) || empty($secret)) {
                 $secret = $_COOKIE[$cookiekey];
@@ -1327,7 +1351,7 @@ class UserFunctions extends DBHelper
                 $userdata = null;
             }
             if ($detail) {
-                return array('state' => self::strbool($state),'status' => $state,'uid' => $userid,'salt' => $salt,'calc_conf' => $conf,'basis_conf' => $hash,'from_cookie' => self::strbool($from_cookie),'got_user_pass_info' => is_array($pw_characters),'got_userdata' => is_array($userdata),'userdata' => $userdata,'source' => $value_create,'error' => $error,'cookie_checked' => $cookiekey, "iv" => $this->getUserSeed());
+                return array('state' => self::strbool($state),'status' => $state,'uid' => $userid,'salt' => $salt,'calc_conf' => $conf,'basis_conf' => $hash,'from_cookie' => self::strbool($from_cookie),'got_user_pass_info' => is_array($pw_characters),'got_userdata' => is_array($userdata),'userdata' => $userdata,'source' => $value_create,'error' => $error,'cookie_checked' => $cookiekey, 'iv' => $this->getUserSeed());
             }
 
             return $state;
@@ -1384,7 +1408,9 @@ class UserFunctions extends DBHelper
             $expire_days = 7;
             $expire = time() + 3600 * 24 * $expire_days;
             # Create a one-time key, store serverside
-            if (!class_exists('Stronghash')) require_once dirname(__FILE__).'/../core/stronghash/php-stronghash.php';
+            if (!class_exists('Stronghash')) {
+                require_once dirname(__FILE__).'/../core/stronghash/php-stronghash.php';
+            }
             $otsalt = Stronghash::createSalt();
             $cookie_secret = Stronghash::createSalt();
             $pw_characters = json_decode($userdata[$this->pwColumn], true);
@@ -1420,10 +1446,9 @@ class UserFunctions extends DBHelper
 
             # Read the XML information ...
             $xml = new Xml();
-            $xml->setXml($userdata["name"]);
+            $xml->setXml($userdata['name']);
             $user_greet = $xml->getTagContents('<fname>');
             $user_full_name = $xml->getTagContents('<name>'); // for now
-
             setcookie($cookieauth, $value, $expire);
             setcookie($cookiekey, $cookie_secret, $expire);
             setcookie($cookieuser, $username, $expire);
@@ -1506,7 +1531,9 @@ class UserFunctions extends DBHelper
             $encryptedSecretsArray = json_decode($encryptedSecretsJson, true);
       # Even if this device is already registered, we want to
       # overwrite the association
-            if (!class_exists('Stronghash')) require_once dirname(__FILE__).'/../core/stronghash/php-stronghash.php';
+            if (!class_exists('Stronghash')) {
+                require_once dirname(__FILE__).'/../core/stronghash/php-stronghash.php';
+            }
       # Create a secret
       $server_secret = Stronghash::createSalt();
       # Encrypt it with $encryption_key ...
@@ -1722,7 +1749,9 @@ class UserFunctions extends DBHelper
          *
          ***/
         $sourcePasswordLength = 2 * $newPasswordLength;
-        if (!class_exists('Stronghash')) require_once dirname(__FILE__).'/../core/stronghash/php-stronghash.php';
+        if (!class_exists('Stronghash')) {
+            require_once dirname(__FILE__).'/../core/stronghash/php-stronghash.php';
+        }
         $passwordBase = Stronghash::createSalt($sourcePasswordLength);
         $ambiguousCharacters = array(
             'l',
@@ -1830,7 +1859,9 @@ class UserFunctions extends DBHelper
              * "guessing", the fact that we're truncating it to eight
              * characters for the user makes it moot.
              */
-            if (!class_exists('Stronghash')) require_once dirname(__FILE__).'/../core/stronghash/php-stronghash.php';
+            if (!class_exists('Stronghash')) {
+                require_once dirname(__FILE__).'/../core/stronghash/php-stronghash.php';
+            }
             $rand_string = Stronghash::createSalt();
             $key = self::createRandomUserPassword(8);
             $pw_data = json_decode($userdata[$this->pwColumn], true);
@@ -1986,7 +2017,9 @@ class UserFunctions extends DBHelper
                 }
                 # The token matches -- let's make them a new password and
                 # provide it.
-                if (!class_exists('Stronghash')) require_once dirname(__FILE__).'/../core/stronghash/php-stronghash.php';
+                if (!class_exists('Stronghash')) {
+                    require_once dirname(__FILE__).'/../core/stronghash/php-stronghash.php';
+                }
                 $newPassword = self::createRandomUserPassword();
                 $hash = new Stronghash();
                 $pw1 = $hash->hasher($newPassword);
@@ -2008,22 +2041,21 @@ class UserFunctions extends DBHelper
                  * validation, which we don't have by definition, so we're
                  * going to manually construct the query here.
                  */
-                $query="UPDATE `".
-                      $this->getTable()."` SET `".
-                      $this->pwColumn."`=\"".
-                      $this->sanitize($pwStore)."\", `data`=\"".
-                      $data."\" WHERE `".
+                $query = 'UPDATE `'.
+                      $this->getTable().'` SET `'.
+                      $this->pwColumn.'`="'.
+                      $this->sanitize($pwStore).'", `data`="'.
+                      $data.'" WHERE `'.
                       $this->userColumn."`='".
                       $this->getUsername()."'";
-                $l=$this->openDB();
-                mysqli_query($l,'BEGIN');
-                $r=mysqli_query($l,$query);
-                $finish_query= $r ? 'COMMIT':'ROLLBACK';
-                $callback = array('status'=>$r,'action'=>$finish_query,"new_password"=>$newPassword, "new_password_length"=>strlen($newPassword), "minimum_length" => $this->getMinPasswordLength(), "maximum_length" => 8192);
-                if($finish_query == 'ROLLBACK')
-                {
-                    $callback["error"] = mysqli_error($l);
-                    $callback["new_password"] = null;
+                $l = $this->openDB();
+                mysqli_query($l, 'BEGIN');
+                $r = mysqli_query($l, $query);
+                $finish_query = $r ? 'COMMIT' : 'ROLLBACK';
+                $callback = array('status' => $r,'action' => $finish_query,'new_password' => $newPassword, 'new_password_length' => strlen($newPassword), 'minimum_length' => $this->getMinPasswordLength(), 'maximum_length' => 8192);
+                if ($finish_query == 'ROLLBACK') {
+                    $callback['error'] = mysqli_error($l);
+                    $callback['new_password'] = null;
                 }
 
                 $r2 = mysqli_query($l, $finish_query);
@@ -2031,10 +2063,9 @@ class UserFunctions extends DBHelper
                 if ($r2 !== true) {
                     $callback['error'] = 'Unable to commit your password reset';
                 }
-                if($callback["status"] === true)
-                {
+                if ($callback['status'] === true) {
                     $verifySetPw = $this->lookupUser($this->getUsername(), $newPassword, false);
-                    $callback["verification_data"] = $verifySetPw["status"];
+                    $callback['verification_data'] = $verifySetPw['status'];
                     # It all worked, remove the secret
                     $this->setTempSecret();
                     if ($doEmailPassword === true) {
@@ -2066,18 +2097,24 @@ class UserFunctions extends DBHelper
                 if (strlen($newPassword) < $this->getMinPasswordLength()) {
                     throw(new Exception('New password is too short. It should be at least '.$this->getMinPasswordLenght().' characters'));
                 }
-                $currentUser = $userLookup["data"];
-                if(strlen($newPassword) < $this->getMinPasswordLength()) throw(new Exception("New password is too short. It should be at least " . $this->getMinPasswordLength() . " characters"));
-                if(strlen($newPassword) > 8192) throw(new Exception("New password is too long. It should be less than 8192 characters"));
-                if (!class_exists('Stronghash')) require_once(dirname(__FILE__).'/../core/stronghash/php-stronghash.php');
-                $hash=new Stronghash;
+                $currentUser = $userLookup['data'];
+                if (strlen($newPassword) < $this->getMinPasswordLength()) {
+                    throw(new Exception('New password is too short. It should be at least '.$this->getMinPasswordLength().' characters'));
+                }
+                if (strlen($newPassword) > 8192) {
+                    throw(new Exception('New password is too long. It should be less than 8192 characters'));
+                }
+                if (!class_exists('Stronghash')) {
+                    require_once dirname(__FILE__).'/../core/stronghash/php-stronghash.php';
+                }
+                $hash = new Stronghash();
 
                 $hashedPw = $hash->hasher($newPassword);
                 $pwStore = json_encode($hashedPw);
                 # We don't need or want to recalculate a hardlink. The old
                 # salt isn't used anywhere where the old value is relevant.
-                $algo=$hashedPw['algo'];
-                $rounds=$hashedPw['rounds'];
+                $algo = $hashedPw['algo'];
+                $rounds = $hashedPw['rounds'];
 
                 # We need to update the "data" column with the $algo and
                 # $rounds data
@@ -2086,72 +2123,70 @@ class UserFunctions extends DBHelper
                 $xml->setXml($data);
                 $backupData = $data;
                 $backupPassword = $currentUser[$this->pwColumn];
-                $data = $xml->updateTag("<rounds>",$this->sanitize($rounds));
-                $data = $xml->updateTag("<algo>",$this->sanitize($algo));
-
+                $data = $xml->updateTag('<rounds>', $this->sanitize($rounds));
+                $data = $xml->updateTag('<algo>', $this->sanitize($algo));
 
                 /*
                  * We can't use writeToUser() since it requires user
                  * validation, and the second part of the update will always fail.
                  * So, we're going to manually construct the query here.
                  */
-                $l=$this->openDB();
+                $l = $this->openDB();
 
-                $query="UPDATE `".
-                      $this->getTable()."` SET `".
-                      $this->pwColumn."`=\"".
-                      mysqli_real_escape_string($l, $pwStore)."\", `data`=\"".
-                      mysqli_real_escape_string($l,$data)."\" WHERE `".
+                $query = 'UPDATE `'.
+                      $this->getTable().'` SET `'.
+                      $this->pwColumn.'`="'.
+                      mysqli_real_escape_string($l, $pwStore).'", `data`="'.
+                      mysqli_real_escape_string($l, $data).'" WHERE `'.
                       $this->userColumn."`='".
                       $this->getUsername()."'";
 
-                mysqli_query($l,'BEGIN');
-                $r=mysqli_query($l,$query);
-                $finish_query= $r ? 'COMMIT':'ROLLBACK';
-                $callback = array('status'=>$r,'action'=>$finish_query,"new_password"=>$newPassword);
-                if($finish_query == 'ROLLBACK')
-                {
-                    $callback["error"] = mysqli_error($l);
+                mysqli_query($l, 'BEGIN');
+                $r = mysqli_query($l, $query);
+                $finish_query = $r ? 'COMMIT' : 'ROLLBACK';
+                $callback = array('status' => $r,'action' => $finish_query,'new_password' => $newPassword);
+                if ($finish_query == 'ROLLBACK') {
+                    $callback['error'] = mysqli_error($l);
                 }
-                $r2=mysqli_query($l,$finish_query);
-                $callback["status"] = $r && $r2;
-                if($callback["status"]) {
+                $r2 = mysqli_query($l, $finish_query);
+                $callback['status'] = $r && $r2;
+                if ($callback['status']) {
                     $verifySetPw = $this->lookupUser($this->getUsername(), $newPassword, false);
-                    $callback["verification_data"] = $verifySetPw["status"];
-                    if(!$verifySetPw["status"]) {
+                    $callback['verification_data'] = $verifySetPw['status'];
+                    if (!$verifySetPw['status']) {
                         # verify setting with a lookup
                         # if bad, revert to old
                         # if reset, try again
                         $revert = array();
-                        $query2="UPDATE `".
-                               $this->getTable()."` SET `".
-                               $this->pwColumn."`=\"".
-                               $backupPassword."\", `data`=\"".
-                               $backupData."\" WHERE `".
+                        $query2 = 'UPDATE `'.
+                               $this->getTable().'` SET `'.
+                               $this->pwColumn.'`="'.
+                               $backupPassword.'", `data`="'.
+                               $backupData.'" WHERE `'.
                                $this->userColumn."`='".
                                $this->getUsername()."'";
-                        mysqli_query($l,'BEGIN');
-                        $r=mysqli_query($l,$query2);
-                        $finish_query= $r ? 'COMMIT':'ROLLBACK';
-                        $revert["action"] = $finish_query;
-                        if($finish_query == 'ROLLBACK')
-                        {
-                            $revert["error"] = mysqli_error($l);
+                        mysqli_query($l, 'BEGIN');
+                        $r = mysqli_query($l, $query2);
+                        $finish_query = $r ? 'COMMIT' : 'ROLLBACK';
+                        $revert['action'] = $finish_query;
+                        if ($finish_query == 'ROLLBACK') {
+                            $revert['error'] = mysqli_error($l);
                         }
-                        $r2=mysqli_query($l,$finish_query);
-                        $revert["status"] = $r && $r2;
-                        $revert["debug"] = array(
-                            "new_data" => $data,
-                            "new_password" => $pwStore,
-                            "original_query" => $query,
-                            "restored_to" => $backupPassword,
-                            "old_data" => $backupData,
+                        $r2 = mysqli_query($l, $finish_query);
+                        $revert['status'] = $r && $r2;
+                        $revert['debug'] = array(
+                            'new_data' => $data,
+                            'new_password' => $pwStore,
+                            'original_query' => $query,
+                            'restored_to' => $backupPassword,
+                            'old_data' => $backupData,
                         );
-                        $callback["revert_status"] = $revert;
-                        $callback["original_status"] = $callback["status"];
-                        $callback["status"] = false;
+                        $callback['revert_status'] = $revert;
+                        $callback['original_status'] = $callback['status'];
+                        $callback['status'] = false;
                     }
                 }
+
                 return $callback;
             }
         } catch (Exception $e) {
@@ -2176,7 +2211,9 @@ class UserFunctions extends DBHelper
         }
         $l = $this->openDB();
         if (is_numeric($totp)) {
-            if (!class_exists('Stronghash')) require_once dirname(__FILE__).'/../core/stronghash/php-stronghash.php';
+            if (!class_exists('Stronghash')) {
+                require_once dirname(__FILE__).'/../core/stronghash/php-stronghash.php';
+            }
             $key = Stronghash::createSalt();
             $query = 'UPDATE `'.$this->getTable().'` SET `'.$this->tmpColumn."`='$key' WHERE `".$this->userColumn."`='".$this->getUsername()."'";
             $r = mysqli_query($l, $query);
@@ -2223,7 +2260,9 @@ class UserFunctions extends DBHelper
         $userString = $target_userdata['creation'].$this->getUsername();
     # We'll use a secret key that is never kept on the server
     if (empty($secret_key)) {
-        if (!class_exists('Stronghash')) require_once dirname(__FILE__).'/../core/stronghash/php-stronghash.php';
+        if (!class_exists('Stronghash')) {
+            require_once dirname(__FILE__).'/../core/stronghash/php-stronghash.php';
+        }
         $secret_key = base64_encode(Stronghash::createSalt(strlen($userString)));
     }
         $return['secret'] = $secret_key;
@@ -2496,7 +2535,9 @@ class UserFunctions extends DBHelper
      *
      * @return array with the twilio object in key "twilio"
      ***/
-        if (!class_exists('Stronghash')) require_once dirname(__FILE__).'/../core/stronghash/php-stronghash.php';
+        if (!class_exists('Stronghash')) {
+            require_once dirname(__FILE__).'/../core/stronghash/php-stronghash.php';
+        }
         $auth = Stronghash::createSalt(8);
     # Write auth to tmpcol
     $query = 'UPDATE `'.$this->getTable().'` SET `'.$this->tmpColumn."`='$auth' WHERE `".$this->userColumn."`='".$this->getUsername()."'";
@@ -2513,31 +2554,40 @@ class UserFunctions extends DBHelper
     }
 
 
-    
-    private function getUserSeed($seedColumn = "random_seed", $verbose = false) {
+    private function getUserSeed($seedColumn = 'random_seed', $verbose = false)
+    {
         # For legacy setups, make sure the random_seed column is there
-        $r = $this->addColumn($seedColumn, "varchar(255)");
-        if ($r["status"] === true 
-            || 
-            ($r["status"] === false && $r["error"] == "COLUMN_EXISTS")) {
+        $r = $this->addColumn($seedColumn, 'varchar(255)');
+        if ($r['status'] === true
+            ||
+            ($r['status'] === false && $r['error'] == 'COLUMN_EXISTS')) {
             # Get the seed!
             try {
             $u = $this->getUser();
-            if(!empty($u[$seedColumn])) return $u[$seedColumn];
+            if (!empty($u[$seedColumn])) {
+                return $u[$seedColumn];
+            }
             $criteria = array($this->linkColumn => $this->getHardlink());
             $seed = Stronghash::createSalt() . Stronghash::genUnique(96);
             $entry = array(
-                $seedColumn => $seed
+                $seedColumn => $seed,
             );
             try {
                 $r = $this->updateEntry($entry, $criteria);
-                if($r !== true) {
-                    if($verbose) return $r;
+                if ($r !== true) {
+                    if ($verbose) {
+                        return $r;
+                    }
+
                     return false;
                 }
+
                 return $seed;
-            } catch(Exception $e) {
-                if($verbose) return $e->getMessage();
+            } catch (Exception $e) {
+                if ($verbose) {
+                    return $e->getMessage();
+                }
+
                 return false;
             }
         }
@@ -2547,7 +2597,10 @@ class UserFunctions extends DBHelper
             }
     }
         # No column, and couldn't create it
-        if($verbose) return "NOT_EXIST_CANT_CREATE";
+        if ($verbose) {
+            return 'NOT_EXIST_CANT_CREATE';
+        }
+
         return false;
     }
     
@@ -2574,20 +2627,23 @@ class UserFunctions extends DBHelper
         $cipherkey = md5($key);
         # For native functions here, no "same-string" data should
         # be stored, so we just want SOMETHING
-        if(empty($iv)) $iv = sha1($cipherkey);
+        if (empty($iv)) {
+            $iv = sha1($cipherkey);
+        }
         if (function_exists(openssl_encrypt)) {
             $method = self::getPreferredCipherMethod();
             $encrypted = openssl_encrypt($string, $method, $cipherkey, $iv);
-        } else if(function_exists(mcrypt_encrypt)) {
+        } elseif (function_exists(mcrypt_encrypt)) {
             $encrypted = mcrypt_encrypt(MCRYPT_RIJNDAEL_256, $cipherkey, $string, MCRYPT_MODE_CBC, $iv);
         } else {
             # Well .... let's not fail, at least.
             $encrypted = $string;
         }
         $encrypted = base64_encode($encrypted);
+
         return $encrypted;
     }
-    public static function decryptThis($key, $encrypted, $iv = "")
+    public static function decryptThis($key, $encrypted, $iv = '')
     {
         /***
          * @param string $key
@@ -2598,11 +2654,13 @@ class UserFunctions extends DBHelper
         $cipherkey = md5($key);
         # For native functions here, no "same-string" data should
         # be stored, so we just want SOMETHING
-        if(empty($iv)) $iv = sha1($cipherkey);
+        if (empty($iv)) {
+            $iv = sha1($cipherkey);
+        }
         if (function_exists(openssl_decrypt)) {
             $method = self::getPreferredCipherMethod();
             $decrypted = openssl_decrypt($string, $method, $cipherkey, $iv);
-        } else if(function_exists(mcrypt_decrypt)) {
+        } elseif (function_exists(mcrypt_decrypt)) {
             $decrypted = mcrypt_decrypt(MCRYPT_RIJNDAEL_256, $cipherkey, $decoded, MCRYPT_MODE_CBC, $iv);
         } else {
             # Well, damn. Let's not fail at any rate.
