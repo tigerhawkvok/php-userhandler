@@ -7,7 +7,7 @@
  * If you want a display!
  ***/
 
-$debug = true;
+$debug = false;
 
 if($debug) {
     error_reporting(E_ALL);
@@ -621,7 +621,7 @@ else if($_REQUEST['q']=='create')
               </label>
 	      <input type='text' name='honey' id='honey' class='hide'/>
 </div>
-        <p>Please solve the <a href='https://en.wikipedia.org/wiki/CAPTCHA' class='newwindow'>CAPTCHA test</a> below</p>
+        <p>Please do the<a href='https://en.wikipedia.org/wiki/CAPTCHA' class='newwindow'>CAPTCHA test</a> below to prove you're human:</p>
         <script src='https://www.google.com/recaptcha/api.js'></script>
         <div class=\"g-recaptcha\" data-sitekey=\"".$recaptcha_public_key."\"></div>
 
@@ -691,7 +691,7 @@ if ($debug) $login_output .= "<pre>".displayDebug($resp)."</pre>";
                             if($res["status"])
                               {
                                 $login_output.="<div class='alert alert-success text-center center-block'><button type='button' class='close' data-dismiss='alert' aria-label='Close'><span aria-hidden='true'>&times;</span></button>
-<h3> ".$res["message"]." </h3></div>"; //jumpto1
+<h3> ".$res["message"]." </h3><p>You can <a class='alert-link' href='".$self_url."'>return to your profile page here</a>.</p></div>"; //jumpto1
                                 if($user->needsManualAuth())
                                   {
                                     $login_output.="<div class='alert alert-warning text-center center-block'><p>Your ability to login will be restricted until you've been authorized.</p></div>";
