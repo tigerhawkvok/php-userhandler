@@ -69,7 +69,7 @@ class UserFunctions extends DBHelper
             $this->setTable($default_user_table);
         } catch (Exception $e) {
             # More complete message
-            $message = '<pre>Could not initialize database setup ['.$e->getMessage().'] in <'.$e->getTraceAsString().'> (using '.$config_path.' with columns '.print_r($db_cols, true).') </pre>';
+        $message = 'Could not initialize database setup ['.$e->getMessage().'] in <'.$e->getTraceAsString().'> (using '.$config_path.')';
             throw(new Exception($message));
         }
 
@@ -158,7 +158,9 @@ class UserFunctions extends DBHelper
     } catch (Exception $e) {
         # If we tried on our own, let's do nothing; if it was user specified, re-throw it
         if (!empty($username)) {
-            throw(new Exception($e->getMessage()));
+            $key = empty($lookup_column) ? $this->userColumn : $lookup_column;
+            $us = array($key => $username);
+            throw(new Exception("Problem setting '$username' as ".print_r($us, true).': '.$e->getMessage()));
         }
     }
     }
@@ -242,7 +244,7 @@ class UserFunctions extends DBHelper
         return empty($userdata[$this->totpColumn]) ? false : $userdata[$this->totpColumn];
     }
 
-    private function setTempSecret($secret)
+    private function setTempSecret($secret = '')
     {
         $userdata = $this->getUser();
         $l = $this->openDB();
@@ -317,27 +319,27 @@ class UserFunctions extends DBHelper
      *
      * @param string|array $user_id Either a column/value pair or an ID for the default column
      ***/
-      $cookielink = $this->domain.'_link';
+        $ouid = $user_id;
+        $cookielink = $this->domain.'_link';
         $altcookielink = str_replace('.', '_', $this->domain).'_link';
         $ucookielink = empty($_COOKIE[$cookielink]) ? $altcookielink : $cookielink;
         if (!empty($user_id) && is_array($user_id) && sizeof($user_id) == 1) {
             # Specified as a column/value pair
-        $col = key($user_id);
+            $col = key($user_id);
             $user_id = current($user_id);
         } elseif (!empty($user_id) && !is_array($user_id)) {
             # Just a id with the default column
-        $col = $this->userColumn;
+            $col = $this->userColumn;
         } elseif (!empty($_COOKIE[$ucookielink])) {
             # See if we can get this from the cookies
             $user_id = $_COOKIE[$ucookielink];
-            $this->userlink = $user_id;
             $col = $this->linkColumn;
         }
 
     # Do we have an ID to work with?
     if (empty($user_id) || empty($col)) {
         # We couldn't get it from direct assignment or cookies
-        throw(new Exception("Unable to set user for '".$col."' => '".$user_id."', and unable to read cookies."));
+        throw(new Exception("Unable to set user for '".$col."' => '".$user_id."', and unable to read cookies. {".print_r($ouid, true).'}'));
     }
 
     # Inputs are sanitized in lookupItem
@@ -433,7 +435,7 @@ class UserFunctions extends DBHelper
         return $this->twilio_number;
     }
 
-    public function canSMS($strict = true)
+    public function canSMS($strict = true, $throw = true)
     {
         /***
      * Return if the user can get an SMS
@@ -446,14 +448,22 @@ class UserFunctions extends DBHelper
         $twilioToken = $this->getTwilioToken();
         $twilio_status = !empty($twilioSID) && !empty($twilioToken);
         if (!$twilio_status && $strict === true) {
-            throw(new Exception("Twilio has not been configured. Be sure that \$twilio_sid, \$twilio_token, and \$twilio_number are specified in config.php, or call setTwilioSID(), setTwilioToken(), and setTwilioNumber() first."));
+            if ($throw) {
+                throw(new Exception("Twilio has not been configured. Be sure that \$twilio_sid, \$twilio_token, and \$twilio_number are specified in config.php, or call setTwilioSID(), setTwilioToken(), and setTwilioNumber() first."));
+            }
+
+            return false;
         } elseif (!$twilio_status) {
             return false;
         }
         $userdata = $this->getUser();
         if ($strict) {
             if (!self::isValidPhone($this->getPhone())) {
-                throw(new Exception('Illegal phone number.'));
+                if ($throw) {
+                    throw(new Exception('Illegal phone number.'));
+                }
+
+                return false;
             }
         }
     # If we're strict, the user only can SMS when the phone number is verified.
@@ -892,7 +902,7 @@ class UserFunctions extends DBHelper
       if (strlen($pw_in) < $this->getMinPasswordLength()) {
           return array('status' => false,'error' => 'Your password is too short. Please try again.');
       }
-    // Complexity checks here, if not relegated to JS ...
+      # Complexity checks here, if not relegated to JS ...
       if (!class_exists('Stronghash')) {
           require_once dirname(__FILE__).'/../core/stronghash/php-stronghash.php';
       }
@@ -908,15 +918,17 @@ class UserFunctions extends DBHelper
       $data_init = "<xml><algo>$algo</algo>$rounds</xml>";
       $name = $this->sanitize($name);
       $dname = $this->sanitize($dname);
-      $ne = self::encryptThis($salt.$pw, implode(' ', $name)); // only encrypt if requested, then put in secdata
-    $sdata_init = '<xml><name>'.$ne.'</name></xml>';
+      $iv = $this->getIV();
+      # only encrypt if requested, then put in secdata
+      $ne = self::encryptThis($salt.$pw, implode(' ', $name), $iv);
+      $sdata_init = '<xml><name>'.$ne.'</name></xml>';
       $names = '<xml><name>'.$this->sanitize(implode(' ', $name)).'</name><fname>'.$this->sanitize($name[0]).'</fname><lname>'.$name[1].'</lname><dname>'.$this->sanitize($dname).'</dname></xml>';
       $hardlink = sha1($salt.$creation);
       $store = array();
       foreach ($this->getCols() as $key => $type) {
           switch ($key) {
           case $this->userColumn:
-              $store[$key] = $user;
+            $store[$key] = $user;
             break;
           case $this->pwColumn:
             $store[$key] = $pw_store; # Generated
@@ -954,7 +966,10 @@ class UserFunctions extends DBHelper
           case 'su_flag':
           case 'disabled':
             $store[$key] = false;
-          break;
+            break;
+          case 'random_seed':
+              $store[$key] = $iv;
+              break;
           default:
             $store[$key] = '';
           }
@@ -988,7 +1003,7 @@ class UserFunctions extends DBHelper
           } else {
               /*
                 , "lookup_result" => $res, "storage_passed" => $store,
-               */
+              */
               return array('status' => false,'error' => 'Failure: Unable to verify user creation', 'human_error' => 'Ther was an error confirming creation of your user. Please try again. Your user may have been partially created already.','add' => $test_res, 'userdata' => $userdata);
           }
       } else {
@@ -1028,6 +1043,7 @@ class UserFunctions extends DBHelper
                     $hash = new Stronghash();
                     $data = json_decode($userdata[$this->pwColumn], true);
                     $original_data = $data;
+                    $data['raw_db'] = $userdata[$this->pwColumn];
                     # Decrypt the password if totp_code is_numeric()
                     if (is_numeric($totp_code)) {
                         $pw = $this->decryptWithStoredKey($pw);
@@ -1042,12 +1058,15 @@ class UserFunctions extends DBHelper
                             if (empty($data['rounds'])) {
                                 $data['rounds'] = 10000;
                             }
+                            if (empty($data['algo'])) {
+                                $data['algo'] = 'sha512';
+                            }
                             $data['salt'] = null;
                             $data['hash'] = $userdata['pass'];
                             $data['legacy'] = true;
                             $pw = $userdata['salt'].$pw.$userdata['creation'];
                         } catch (Exception $e) {
-                            return array(false,'message' => 'No valid password data');
+                            return array(false,'status' => false, 'message' => 'No valid password data');
                         }
                     }
                     if ($hash->verifyHash($pw, $data)) {
@@ -1074,7 +1093,7 @@ class UserFunctions extends DBHelper
                                 if ($r === false) {
                                     throw(new Exception('Unable to encrypt password'));
                                 }
-                                $encrypted_pw = urlencode(self::encryptThis($key, $pw));
+                                $encrypted_pw = urlencode(self::encryptThis($key, $pw, $this->getIV()));
 
                                 # Encrypt the keys to validate the user asynchronously
                                 # Of course, this this was called asynchronously, the keys will be empty ...
@@ -1084,8 +1103,8 @@ class UserFunctions extends DBHelper
                                 $cookieauth = $this->domain.'_auth';
                                 #$cookieauth=str_replace(".","_",$this->domain)."_auth";
 
-                                $encrypted_secret = self::encryptThis($key, $_COOKIE[$cookiekey]);
-                                $encrypted_hash = self::encryptThis($key, $_COOKIE[$cookieauth]);
+                                $encrypted_secret = self::encryptThis($key, $_COOKIE[$cookiekey], $this->getIV());
+                                $encrypted_hash = self::encryptThis($key, $_COOKIE[$cookieauth], $this->getIV());
 
                                 return array(false,'status' => false,'totp' => true,'error' => false,'human_error' => 'Please enter the code generated by the authenticator application on your device.','encrypted_password' => $encrypted_pw,'encrypted_secret' => $encrypted_secret,'encrypted_hash' => $encrypted_hash);
                             }
@@ -1098,7 +1117,7 @@ class UserFunctions extends DBHelper
                             mysqli_query($l, $query);
                             # Return decrypted userdata, if applicable
                             # The salt is the password key "salt"
-                            $decname = self::decryptThis($data['salt'].$pw, $userdata['name']);
+                            $decname = self::decryptThis($data['salt'].$pw, $userdata['name'], $this->getIV());
                             if (empty($decname)) {
                                 $decname = $userdata['name'];
                             }
@@ -1115,7 +1134,7 @@ class UserFunctions extends DBHelper
                             # This user is OK and not disabled, nor pending validation
                             # Return decrypted userdata, if applicable
                             # The salt is the password key "salt"
-                            $decname = self::decryptThis($data['salt'].$pw, $userdata['name']);
+                            $decname = self::decryptThis($data['salt'].$pw, $userdata['name'], $this->getIV());
                             if (empty($decname)) {
                                 $decname = $userdata['name'];
                             }
@@ -1147,7 +1166,7 @@ class UserFunctions extends DBHelper
                             }
                             # All checks passed.
                             if (!$return) {
-                                $decname = self::decryptThis($salt.$pw, $userdata['name']);
+                                $decname = self::decryptThis($salt.$pw, $userdata['name'], $this->getIV());
                                 if (empty($decname)) {
                                     $decname = $userdata['name'];
                                 }
@@ -1161,12 +1180,9 @@ class UserFunctions extends DBHelper
                             }
                         }
                     } else {
-                        /*
-                          , "detail" => $hash->verifyHash($pw, $data, null, null, null, true), "given" => $pw, "stored_data_reference" => $data, "original_data" => $original_data, "userdata" => $userdata
-                        */
-                        return array(false,'status' => false,'message' => 'Sorry, your username or password is incorrect.','error' => 'Bad Password');
+                        return array(false,'status' => false,'message' => 'Sorry, your username or password is incorrect.','error' => 'Bad Password'); # , "data" => $data, "check_results" => $hash->verifyHash($pw, $data, null, null, null, true)
                     }
-                    # end good username loop
+                # end good username loop
                 } else {
                     return array(false,'status' => false,'message' => 'Sorry, your username or password is incorrect.','error' => 'Bad username','desc' => 'No numeric id');
                 }
@@ -1251,7 +1267,7 @@ class UserFunctions extends DBHelper
         return array('status' => false,'error' => 'Unsupported image upload method','app_error_code' => 120,'human_error' => 'The upload method you tried is not yet supported. Please try an alternate method.');
     }
 
-    public function validateUser($userid = null, $hash = null, $secret = null, $detail = false, $permitRestricted = false)
+    public function validateUser($userid = null, $hash = null, $secret = null, $detail = false)
     {
         /***
      * Returns true or false based on user validation
@@ -1269,14 +1285,13 @@ class UserFunctions extends DBHelper
      * @param string $hash Provide the final computed string to work with
      * @param string $secret Provide the cookie secret to work with
      * @param bool $detail Provide detailed returns
-     * @param bool $permitRestricted allow restricted
-     * profiles. Default false.
      * @return bool|array bool if $detail is false, array if $detail is true
      ***/
       $cookiekey = $this->domain.'_secret';
         $altcookiekey = str_replace('.', '_', $this->domain).'_secret';
         $cookieauth = $this->domain.'_auth';
         $altcookieauth = str_replace('.', '_', $this->domain).'_auth';
+        $originalId = $userid;
         if ($userid === true) {
             # We are short-cutting getting the details back for the
         # current user
@@ -1307,7 +1322,6 @@ class UserFunctions extends DBHelper
                     );
                 }
             }
-
             if (empty($hash) || empty($secret)) {
                 $secret = $_COOKIE[$cookiekey];
                 $hash = $_COOKIE[$cookieauth];
@@ -1318,7 +1332,7 @@ class UserFunctions extends DBHelper
                 $from_cookie = true;
                 if (empty($hash) || empty($secret)) {
                     if ($detail) {
-                        return array('state' => false,'status' => false,'error' => 'Empty verification tokens','uid' => $userid,'salt' => $salt,'calc_conf' => $conf,'basis_conf' => $hash,'have_secret' => self::strbool(!empty($secret)),'from_cookie' => self::strbool($from_cookie),'cookie_checked' => $cookiekey);
+                        return array('state' => false,'status' => false,'error' => 'Empty verification tokens','uid' => $userid, 'salt' => $salt,'calc_conf' => $conf,'basis_conf' => $hash,'have_secret' => self::strbool(!empty($secret)),'from_cookie' => self::strbool($from_cookie),'cookie_checked' => $cookiekey);
                     }
 
                     return false;
@@ -1350,7 +1364,7 @@ class UserFunctions extends DBHelper
                 $userdata = null;
             }
             if ($detail) {
-                return array('state' => self::strbool($state),'status' => $state,'uid' => $userid,'salt' => $salt,'calc_conf' => $conf,'basis_conf' => $hash,'from_cookie' => self::strbool($from_cookie),'got_user_pass_info' => is_array($pw_characters),'got_userdata' => is_array($userdata),'userdata' => $userdata,'source' => $value_create,'error' => $error,'cookie_checked' => $cookiekey, 'iv' => $this->getUserSeed());
+                return array('state' => self::strbool($state),'status' => $state,'uid' => $userid,'salt' => $salt,'calc_conf' => $conf,'basis_conf' => $hash,'from_cookie' => self::strbool($from_cookie),'got_user_pass_info' => is_array($pw_characters),'got_userdata' => is_array($userdata),'userdata' => $userdata,'source' => $value_create,'error' => $error,'cookie_checked' => $cookiekey, 'iv' => $this->getIV());
             }
 
             return $state;
@@ -1385,7 +1399,6 @@ class UserFunctions extends DBHelper
          * @param
          * @return
          ***/
-
         try {
             if (empty($username)) {
                 $userdata = $this->getUser();
@@ -1403,10 +1416,10 @@ class UserFunctions extends DBHelper
             $id = $userdata['id'];
             $dblink = $userdata[$this->linkColumn];
 
-            # Nom, cookies!
-            $expire_days = 7;
+        # Nom, cookies!
+        $expire_days = 7;
             $expire = time() + 3600 * 24 * $expire_days;
-            # Create a one-time key, store serverside
+        # Create a one-time key, store serverside
             if (!class_exists('Stronghash')) {
                 require_once dirname(__FILE__).'/../core/stronghash/php-stronghash.php';
             }
@@ -1416,8 +1429,8 @@ class UserFunctions extends DBHelper
             $salt = $pw_characters['salt'];
             $current_ip = empty($current_ip) ? $_SERVER['REMOTE_ADDR'] : $remote;
 
-            # store it
-            $query = 'UPDATE `'.$this->getTable().'` SET `'.$this->cookieColumn."`='$otsalt', `".$this->ipColumn."`='$current_ip', `last_login`='".microtime_float()."' WHERE id='$id'";
+        # store it
+        $query = 'UPDATE `'.$this->getTable().'` SET `'.$this->cookieColumn."`='$otsalt', `".$this->ipColumn."`='$current_ip', `last_login`='".microtime_float()."' WHERE id='$id'";
             $l = $this->openDB();
             mysqli_query($l, 'BEGIN');
             $result = mysqli_query($l, $query);
@@ -1431,7 +1444,7 @@ class UserFunctions extends DBHelper
 
             $value_create = array($cookie_secret,$salt,$otsalt,$current_ip,$this->getSiteKey());
 
-            // authenticated since last login. Nontransposable outside network.
+            # authenticated since last login. Nontransposable outside network.
 
             $value = sha1(implode('', $value_create));
 
@@ -1448,17 +1461,6 @@ class UserFunctions extends DBHelper
             $xml->setXml($userdata['name']);
             $user_greet = $xml->getTagContents('<fname>');
             $user_full_name = $xml->getTagContents('<name>'); // for now
-
-            if (empty($user_greet)) {
-                try {
-                    $xml->setXml($userdata['name']);
-                    $user_greet = $xml->getTagContents('<fname>');
-                    $user_full_name = $xml->getTagContents('<name');
-                } catch (Exception $e) {
-                    # Do nothing
-                }
-            }
-
             setcookie($cookieauth, $value, $expire);
             setcookie($cookiekey, $cookie_secret, $expire);
             setcookie($cookieuser, $username, $expire);
@@ -1547,7 +1549,7 @@ class UserFunctions extends DBHelper
       # Create a secret
       $server_secret = Stronghash::createSalt();
       # Encrypt it with $encryption_key ...
-      $data = self::encryptThis($encryption_key, $server_secret);
+      $data = self::encryptThis($encryption_key, $server_secret, $this->getIV());
             $encryptedSecretsArray[$device] = $data;
             $encryptedSecretsJson = json_encode($encryptedSecretsArray);
       # ... and save it
@@ -1622,7 +1624,7 @@ class UserFunctions extends DBHelper
 
           return array('status' => false,'human_error' => "This device isn't yet registered. Please log in with this device first",'error' => 'Invalid device','app_error_code' => 105, 'details' => array('device' => $verify_data['device'],'valid_devices' => $validDevices,'raw_json' => $encryptedSecretsJson, 'raw_encrypted' => $encryptedSecretsArray));
       }
-        $secret = self::decryptThis($verify_data['appsecret_key'], $encryptedSecretsArray[$verify_data['device']]);
+        $secret = self::decryptThis($verify_data['appsecret_key'], $encryptedSecretsArray[$verify_data['device']], $this->getIV());
       # Now we can verify the provided auth token
       $computedToken = sha1($verify_data['auth_prepend'].$secret.$verify_data['auth_postpend']);
         $providedToken = $verify_data['authorization_token'];
@@ -1877,7 +1879,7 @@ class UserFunctions extends DBHelper
             $pw_data = json_decode($userdata[$this->pwColumn], true);
             $salt = $pw_data['salt'];
             $user_verify_token = substr(hash('md5', $salt.$rand_string), 0, 8);
-            $encrypted_secret = self::encryptThis($key, $rand_string);
+            $encrypted_secret = self::encryptThis($key, $rand_string, $this->getIV());
             $this->setTempSecret($encrypted_secret);
             # These tokens are the ones we'll send to the user
             $user_tokens = array('key' => $key,'verify' => $user_verify_token);
@@ -1893,8 +1895,10 @@ class UserFunctions extends DBHelper
                 }
                 $email_link = $this->getQualifiedDomain().$rel_dir.$url.'?action=finishpasswordreset&key='.urlencode($user_tokens['key']).'&verify='.urlencode($user_tokens['verify']).'&user='.$this->getUsername();
                 $mail = $this->getMailObject();
-                $mail->Subject = '['.$this->getDomain().'] Account Reset';
-                $mail->Body = "<p>You've requested to reset the password to ".$this->getDomain().". Click or copy-paste the link below to reset your password.</p><pre><a href='".$email_link."'>".$email_link.'</a></pre><p>You can also enter a verification code of <strong>'.$user_tokens['verify'].'</strong> and key of <strong>'.$user_tokens['key']."</strong> on the reset page.</p><p>If you didn't request a password change, you can ignore this email.</p>.";
+                $subject = '['.$this->getDomain().'] Account Reset';
+                $mail->Subject = $subject;
+                $body = "<p>You've requested to reset the password to ".$this->getDomain().". Click or copy-paste the link below to reset your password.</p><pre><a href='".$email_link."'>".$email_link.'</a></pre><p>You can also enter a verification code of <strong>'.$user_tokens['verify'].'</strong> and key of <strong>'.$user_tokens['key']."</strong> on the reset page.</p><p>If you didn't request a password change, you can ignore this email.</p>.";
+                $mail->Body = $body;
                 $mail->addAddress($this->getUsername());
                 $status = $mail->send();
                 $email = array(
@@ -1902,6 +1906,11 @@ class UserFunctions extends DBHelper
                     'subject' => $mail->Subject,
                     'body' => $mail->Body,
                 );
+                $to = $this->getUsername();
+                $headers = 'MIME-Version: 1.0'."\r\n";
+                $headers .= 'Content-type: text/html; charset=iso-8859-1'."\r\n";
+                $headers .= 'From: ['.$this->getDomain().'] Mailer Bot <blackhole@'.$this->getDomain().'>';
+                #mail($to,$subject,$body,$headers);
                 # You can include email as a callback arg for debugging, but
                 # not for release -- VERY insecure
                 $callback = array('status' => $status,'method' => 'email');
@@ -1913,7 +1922,7 @@ class UserFunctions extends DBHelper
                 return $callback;
             } elseif ($method == 'sms') {
                 # Reset by text
-                if ($this->canSMS()) {
+                if ($this->canSMS(false)) {
                     $sms_message = 'At the reset password prompt, for KEY enter '.$user_tokens['key'].' , and for VERIFY enter '.$user_tokens['verify'];
                     $t_obj = $this->textUser($sms_message);
 
@@ -1951,11 +1960,15 @@ class UserFunctions extends DBHelper
             if ($isResetPassword === true) {
                 try {
                     $emailPassword = $passwordBlob['email_password'] == true;
+                    $ua = array(
+                        $this->userColumn => $passwordBlob['user'],
+                    );
+                    $this->setUser($ua);
 
                     return $this->changeUserPassword($passwordBlob, $emailPassword, true);
                 } catch (Exception $e) {
                     # Handle the exception
-                    return array('status' => false, 'error' => $e->getMessage(),'human_error' => 'There was an error resetting your password ('.$e->getMessage().').','app_error_code' => 150);
+                    return array('status' => false, 'error' => $e->getMessage(),'human_error' => 'There was an error resetting your password ('.$e->getMessage().').','app_error_code' => 150, 'blob' => $passwordBlob, 'user_set_array' => $ua);
                 }
             } else {
                 # We're updating, not restting the password.
@@ -2002,6 +2015,9 @@ class UserFunctions extends DBHelper
         try {
             if ($isResetPassword === true) {
                 $userdata = $this->getUser();
+                if (empty($userdata)) {
+                    throw(new Exception('Base user not set'));
+                }
                 $doEmailPassword = $newPassword === true;
                 # We can't verify the old password, so we have to verify the
                 # reset token provided under $oldPassword instead
@@ -2018,12 +2034,26 @@ class UserFunctions extends DBHelper
                 $salt = $pw_data['salt'];
                 # Pull the secret from the temp column
                 $secret = $this->getSecret(true);
-                $string = self::decryptThis($key, $secret);
+                $string = self::decryptThis($key, $secret, $this->getIV());
                 $test_string = $salt.$string;
                 $match_token = substr(hash('md5', $test_string), 0, 8);
                 if ($match_token != $verify) {
                     # The computed token doesn't match the provided one
-                    throw(new Exception('Invalid reset tokens'));
+                    // $testPass = "123abc";
+                    // $method = self::getPreferredCipherMethod();
+                    // $iv = self::getIV();
+                    // $testPass = md5($testPass);
+                    // $foo = openssl_encrypt("FooBar", $method, $testPass, 0, $iv);
+                    // $foo64 = base64_encode($foo);
+                    // $bar64 = openssl_decrypt(base64_decode($foo64), $method, $testPass, 0, $iv);
+                    // $bar = openssl_decrypt($foo, $method, $testPass, 0, $iv);
+                    // $barTrim = rtrim($bar, "\0");
+                    // $barTrim64 = rtrim($bar64, "\0");
+                    // $testPass = substr($testPass, 0, 8);
+                    // $faz = self::encryptThis("FooBar", $testPass, $this->getIV());
+                    // $baz = self::decryptThis($faz, $testPass);
+                    #throw( new Exception('Invalid reset tokens (got '.$string.' and match '.$match_token.' from '.$salt.' and '.$secret.' [input->'.$key.':'.$verify.' with iv '.$this->getIV().']). Tested '.$foo.' decoding to '.$bar.' with '.$method. " (64: $foo64 to $bar64 to $barTrim64 vs ".$barTrim.") Also $faz -> $baz and " . openssl_error_string() ) );
+                    throw( new Exception('Invalid reset tokens') );
                 }
                 # The token matches -- let's make them a new password and
                 # provide it.
@@ -2033,7 +2063,7 @@ class UserFunctions extends DBHelper
                 $newPassword = self::createRandomUserPassword();
                 $hash = new Stronghash();
                 $pw1 = $hash->hasher($newPassword);
-                $pw_store = json_encode($pw1);
+                $pwStore = json_encode($pw1);
                 # We don't need or want to recalculate a hardlink. The old
                 # salt isn't used anywhere where the old value is relevant.
                 $algo = $pw1['algo'];
@@ -2054,7 +2084,7 @@ class UserFunctions extends DBHelper
                 $query = 'UPDATE `'.
                       $this->getTable().'` SET `'.
                       $this->pwColumn.'`="'.
-                      $this->sanitize($pwStore).'", `data`="'.
+                      $this->sanitize($pwStore, true).'", `data`="'.
                       $data.'" WHERE `'.
                       $this->userColumn."`='".
                       $this->getUsername()."'";
@@ -2128,9 +2158,9 @@ class UserFunctions extends DBHelper
 
                 # We need to update the "data" column with the $algo and
                 # $rounds data
-                $data = $currentUser['data'];
                 $xml = new Xml();
                 $xml->setXml($data);
+                $data = $currentUser['data'];
                 $backupData = $data;
                 $backupPassword = $currentUser[$this->pwColumn];
                 $data = $xml->updateTag('<rounds>', $this->sanitize($rounds));
@@ -2169,12 +2199,12 @@ class UserFunctions extends DBHelper
                         # if reset, try again
                         $revert = array();
                         $query2 = 'UPDATE `'.
-                               $this->getTable().'` SET `'.
-                               $this->pwColumn.'`="'.
-                               $backupPassword.'", `data`="'.
-                               $backupData.'" WHERE `'.
-                               $this->userColumn."`='".
-                               $this->getUsername()."'";
+                                $this->getTable().'` SET `'.
+                                $this->pwColumn.'`="'.
+                                $backupPassword.'", `data`="'.
+                                $backupData.'" WHERE `'.
+                                $this->userColumn."`='".
+                                $this->getUsername()."'";
                         mysqli_query($l, 'BEGIN');
                         $r = mysqli_query($l, $query2);
                         $finish_query = $r ? 'COMMIT' : 'ROLLBACK';
@@ -2201,7 +2231,7 @@ class UserFunctions extends DBHelper
             }
         } catch (Exception $e) {
             # Bad user
-            throw(new Exception('Invalid credentials - '.$e->getMessage()));
+            throw(new Exception('Invalid user credentials - '.$e->getMessage()));
         }
     }
 
@@ -2230,8 +2260,8 @@ class UserFunctions extends DBHelper
             if ($r === false) {
                 throw(new Exception('Unable to encrypt password'));
             }
-        # Play nice with lookupUser
-        $encrypted_pw = self::encryptThis($key, $pw);
+            # Play nice with lookupUser
+            $encrypted_pw = self::encryptThis($key, $pw, $this->getIV());
             $lookup = $this->lookupUser($username, $encrypted_pw, false, $totp, true);
         } else {
             $lookup = $this->lookupUser($username, $password, false, $totp, true);
@@ -2309,8 +2339,6 @@ class UserFunctions extends DBHelper
         if (substr($rel_dir, -1) != '/' && !empty($rel_dir)) {
             $rel_dir = $rel_dir.'/';
         }
-        # Might want to slice out qualdomain from rel_dir if we're
-        # getting issues ....
         $link = $this->getQualifiedDomain().$rel_dir.$url.'?confirm=true&token='.$components['auth'].'&user='.$components['user'].'&key=';
     # get all the administrative users, and encrypt the key with their
     # user DB link
@@ -2336,7 +2364,7 @@ class UserFunctions extends DBHelper
             $success = true;
             }
             $dblink = $row[1];
-            $cryptkey = self::encryptThis($dblink, $components['secret']);
+            $cryptkey = self::encryptThis($dblink, $components['secret'], $this->getIV());
             $encoded_key = urlencode(base64_encode($cryptkey));
             $admin_link = $link.$encoded_key;
             $destinations[] = array('to' => $to,'key' => $encoded_key,'crypted' => $cryptkey,'encrypted_with' => $dblink,'emailed_link' => $admin_link);
@@ -2404,7 +2432,7 @@ class UserFunctions extends DBHelper
         return $ret;
     }
         $working_key = base64_decode(urldecode($encoded_key));
-        $key = self::decryptThis($thisUserdata[$this->linkColumn], $working_key);
+        $key = self::decryptThis($thisUserdata[$this->linkColumn], $working_key, $this->getIV());
         $components = $this->getAuthTokens($target_user, $key);
         $primary_token = $components['auth'];
         if ($primary_token != $token) {
@@ -2573,32 +2601,37 @@ class UserFunctions extends DBHelper
             ||
             ($r['status'] === false && $r['error'] == 'COLUMN_EXISTS')) {
             # Get the seed!
-            $u = $this->getUser();
-            if (!empty($u[$seedColumn])) {
-                return $u[$seedColumn];
-            }
-            $criteria = array($this->linkColumn => $this->getHardlink());
-            $seed = Stronghash::createSalt().Stronghash::genUnique(96);
-            $entry = array(
-                $seedColumn => $seed,
-            );
             try {
-                $r = $this->updateEntry($entry, $criteria);
-                if ($r !== true) {
+                $u = $this->getUser();
+                if (!empty($u[$seedColumn])) {
+                    return $u[$seedColumn];
+                }
+                $criteria = array($this->linkColumn => $this->getHardlink());
+                $seed = Stronghash::createSalt().Stronghash::genUnique(96);
+                $entry = array(
+                    $seedColumn => $seed,
+                );
+                try {
+                    $r = $this->updateEntry($entry, $criteria);
+                    if ($r !== true) {
+                        if ($verbose) {
+                            return $r;
+                        }
+
+                        return false;
+                    }
+
+                    return $seed;
+                } catch (Exception $e) {
                     if ($verbose) {
-                        return $r;
+                        return $e->getMessage();
                     }
 
                     return false;
                 }
-
-                return $seed;
             } catch (Exception $e) {
-                if ($verbose) {
-                    return $e->getMessage();
-                }
-
-                return false;
+                # Not created yet
+                return Stronghash::createSalt().Stronghash::genUnique(96);
             }
         }
         # No column, and couldn't create it
@@ -2609,12 +2642,52 @@ class UserFunctions extends DBHelper
         return false;
     }
 
+
     private static function getPreferredCipherMethod()
     {
+        /***
+         * Get the best functional OpenSSL cipher method.
+         *
+         * Should only be called in contexts that the library's
+         * presence is already checked.
+         *
+         * @return string The cipher method that encodes and decodes
+         * best, correctly on the client machine.
+         ***/
         # TODO method to determine best cipher method
         $methods = openssl_get_cipher_methods();
+        $testPass = "123abc";
+        $testString = "FooBar";
+        $testIV = sha1($testString);
+        $testMethods = array(
+            'AES-256-CBC-HMAC-SHA1',
+            "AES-128-CBC-HMAC-SHA1",
+            "AES-256-CBC",
+            "AES-192-CBC",
+            "AES-128-CBC",
+        );
+        foreach($testMethods as $method) {
+            $iv = self::getIV($testIV, $method);
+            $foo = openssl_encrypt($testString, $method, $testPass, 0, $iv);
+            $bar = openssl_decrypt($foo, $method, $testPass, 0, $iv);
+            if ($testString == $bar) {
+                return $method;
+            }
+        }
+    }
 
-        return 'AES-256-CBC-HMAC-SHA1';
+    public function getIV($base = null, $method = null) {
+        /***
+         *
+         ***/
+        if (empty($base)) $base = $this->getUserSeed();
+        if (empty($method)) $method = self::getPreferredCipherMethod();
+        $length = openssl_cipher_iv_length($method);
+        while(strlen($base) < $length) {
+            $base .= hash("sha512", $base);
+        }
+        $iv = substr($base, 0, $length);
+        return $iv;
     }
 
     public static function encryptThis($key, $string, $iv = '')
@@ -2622,8 +2695,10 @@ class UserFunctions extends DBHelper
         /***
          * @param string $key
          * @param string $string
+         * @param string $iv -> Initialization value
          * @return string An encrypted, base64-encoded result
          ***/
+
         $cipherkey = md5($key);
         # For native functions here, no "same-string" data should
         # be stored, so we just want SOMETHING
@@ -2632,7 +2707,8 @@ class UserFunctions extends DBHelper
         }
         if (function_exists(openssl_encrypt)) {
             $method = self::getPreferredCipherMethod();
-            $encrypted = openssl_encrypt($string, $method, $cipherkey, $iv);
+            # http://us3.php.net/manual/en/function.openssl-encrypt.php
+            $encrypted = openssl_encrypt($string, $method, $cipherkey, 0, $iv);
         } elseif (function_exists(mcrypt_encrypt)) {
             $encrypted = mcrypt_encrypt(MCRYPT_RIJNDAEL_256, $cipherkey, $string, MCRYPT_MODE_CBC, $iv);
         } else {
@@ -2643,13 +2719,15 @@ class UserFunctions extends DBHelper
 
         return $encrypted;
     }
+
     public static function decryptThis($key, $encrypted, $iv = '')
     {
         /***
-         * @param string $key
-         * @param string $encrypted A base 64 encoded string
-         * @return string The decrypted string
-         ***/
+     * @param string $key
+     * @param string $encrypted A base 64 encoded string
+     * @param string $iv -> Initialization value
+     * @return string The decrypted string
+     ***/
         $decoded = base64_decode($encrypted);
         $cipherkey = md5($key);
         # For native functions here, no "same-string" data should
@@ -2659,7 +2737,8 @@ class UserFunctions extends DBHelper
         }
         if (function_exists(openssl_decrypt)) {
             $method = self::getPreferredCipherMethod();
-            $decrypted = openssl_decrypt($string, $method, $cipherkey, $iv);
+            # http://us3.php.net/manual/en/function.openssl-decrypt.php
+            $decrypted = openssl_decrypt($decoded, $method, $cipherkey, 0, $iv);
         } elseif (function_exists(mcrypt_decrypt)) {
             $decrypted = mcrypt_decrypt(MCRYPT_RIJNDAEL_256, $cipherkey, $decoded, MCRYPT_MODE_CBC, $iv);
         } else {
@@ -2669,6 +2748,7 @@ class UserFunctions extends DBHelper
         # Remove any padding before returning
         return rtrim($decrypted, "\0");
     }
+
     public function decryptWithStoredKey($encrypted)
     {
         /***
@@ -2685,7 +2765,7 @@ class UserFunctions extends DBHelper
             }
             $row = mysqli_fetch_row($r);
             $key = $row[0];
-            $string = self::decryptThis($key, $encrypted);
+            $string = self::decryptThis($key, $encrypted, $this->getIV());
 
             return $string;
         }

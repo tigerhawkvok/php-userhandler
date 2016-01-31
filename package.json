@@ -1,6 +1,6 @@
 {
     "name": "php-userhandler",
-    "version": "0.15.3",
+    "version": "0.15.4",
     "description": "Self-Contained PHP user handler",
     "main": "login.php",
     "dependencies": {
@@ -18,7 +18,7 @@
         "grunt-php-cs-fixer": "0.0.8",
         "grunt-shell": "^1.1.2",
         "grunt-contrib-cssmin": "^0.14.0",
-        "grunt-html": "^5.0.1",
+        "grunt-html": "^6.0.0",
         "grunt-string-replace": "^1.2.1"
     },
     "scripts": {
@@ -29,7 +29,7 @@
         "url": "https://github.com/tigerhawkvok/php-userhandler.git"
     },
     "author": "Philip Kahn <tigerhawkvok@gmail.com>",
-    "license": "LGPL-3.0",
+    "license": "LGPLv3",
     "bugs": {
         "url": "https://github.com/tigerhawkvok/php-userhandler/issues"
     },

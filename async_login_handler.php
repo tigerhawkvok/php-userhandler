@@ -47,33 +47,31 @@ if ($allow_insecure_connections !== true) {
     }
 }
 
-if (!function_exists('returnAjax')) {
-    function returnAjax($data)
-    {
-        if (!is_array($data)) {
-            $data = array($data);
-        }
-        $data['execution_time'] = elapsed();
-        $data['completed'] = microtime_float();
-        global $do;
-        $data['requested_action'] = $do;
-        $data['args_provided'] = $_REQUEST;
-        if (!isset($data['status'])) {
-            $data['status'] = false;
-            $data['error'] = 'Server returned null or otherwise no status.';
-            $data['human_error'] = "Server didn't respond correctly. Please try again.";
-            $data['app_error_code'] = -10;
-        }
-        header('Cache-Control: no-cache, must-revalidate');
-        header('Expires: Mon, 26 Jul 1997 05:00:00 GMT');
-        header('Content-type: application/json');
-        global $billingTokens;
-        if (is_array($billingTokens)) {
-            $data['billing_meta'] = $billingTokens;
-        }
-        print @json_encode($data, JSON_FORCE_OBJECT);
-        exit();
+function returnAjax($data)
+{
+    if (!is_array($data)) {
+        $data = array($data);
     }
+    $data['execution_time'] = elapsed();
+    $data['completed'] = microtime_float();
+    global $do;
+    $data['requested_action'] = $do;
+    $data['args_provided'] = $_REQUEST;
+    if (!isset($data['status'])) {
+        $data['status'] = false;
+        $data['error'] = 'Server returned null or otherwise no status.';
+        $data['human_error'] = "Server didn't respond correctly. Please try again.";
+        $data['app_error_code'] = -10;
+    }
+    header('Cache-Control: no-cache, must-revalidate');
+    header('Expires: Mon, 26 Jul 1997 05:00:00 GMT');
+    header('Content-type: application/json');
+    global $billingTokens;
+    if (is_array($billingTokens)) {
+        $data['billing_meta'] = $billingTokens;
+    }
+    print @json_encode($data, JSON_FORCE_OBJECT);
+    exit();
 }
 
 parse_str($_SERVER['QUERY_STRING'], $_GET);
@@ -84,9 +82,6 @@ if ($print_login_state === true) {
       case 'get_login_status':
         returnAjax(getLoginState($_REQUEST));
         break;
-      case 'force_cookies':
-          returnAjax(forceResetCookieTokens());
-          break;
       case 'write':
         returnAjax(saveToUser($_REQUEST));
         break;
@@ -159,13 +154,6 @@ function getLoginState($get, $default = false)
     }
 
     return array('status' => $loginStatus,'defaulted' => $default,'login_url' => $login_url,'detail' => $userDetail);
-}
-
-function forceResetCookieTokens()
-{
-    $u = new UserFunctions();
-
-    return $u->createCookieTokens();
 }
 
 function hasTOTP($get)
@@ -463,22 +451,22 @@ function doStartResetPassword($get)
 {
     $u = new UserFunctions($get['username']);
 
-    return $u->resetUserPassword($get['method']);
+    return $u->resetUserPassword($get['method'], $get['totp']);
 }
 
 function finishResetPassword($get)
 {
-    $u = new UserFunctions($get['username']);
-    $passwordBlob = array(
-    'key' => $get['key'],
-    'verify' => $get['verify'],
-    'user' => $get['username'],
-    'email_password' => $get['email_password'],
-  );
     try {
+        $u = new UserFunctions($get['username']);
+        $passwordBlob = array(
+          'key' => $get['key'],
+          'verify' => $get['verify'],
+          'user' => $get['username'],
+          'email_password' => $get['email_password'],
+      );
         $ret = $u->doUpdatePassword($passwordBlob, true);
     } catch (Exception $e) {
-        $ret = array('status' => false,'error' => $e->getMessage(),'human_error' => 'There was a server problem validating the reset. Please try again.');
+        $ret = array('status' => false,'error' => $e->getMessage(),'human_error' => 'There was a server problem validating the reset. Please try again.', 'parse_error' => $e->getMessage());
     }
 
     return $ret;

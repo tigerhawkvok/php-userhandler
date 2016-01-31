@@ -142,15 +142,15 @@
             $vect = self::vectSVG($frame, $pixelPerPoint, $outerFrame, $back_color, $fore_color);
             
             if ($filename === false) {
-                # header("Content-Type: image/svg+xml");
+                header("Content-Type: image/svg+xml");
                 //header('Content-Disposition: attachment, filename="qrcode.svg"');
-                return $vect;
+                echo $vect;
             } else {
                 if($saveandprint===TRUE){
                     QRtools::save($vect, $filename);
-                    # header("Content-Type: image/svg+xml");
+                    header("Content-Type: image/svg+xml");
                     //header('Content-Disposition: filename="'.$filename.'"');
-                    return $vect;
+                    echo $vect;
                 }else{
                     QRtools::save($vect, $filename);
                 }
