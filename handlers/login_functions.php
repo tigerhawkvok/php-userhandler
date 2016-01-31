@@ -2053,7 +2053,7 @@ class UserFunctions extends DBHelper
                     // $faz = self::encryptThis("FooBar", $testPass, $this->getIV());
                     // $baz = self::decryptThis($faz, $testPass);
                     #throw( new Exception('Invalid reset tokens (got '.$string.' and match '.$match_token.' from '.$salt.' and '.$secret.' [input->'.$key.':'.$verify.' with iv '.$this->getIV().']). Tested '.$foo.' decoding to '.$bar.' with '.$method. " (64: $foo64 to $bar64 to $barTrim64 vs ".$barTrim.") Also $faz -> $baz and " . openssl_error_string() ) );
-                    throw( new Exception('Invalid reset tokens') );
+                    throw(new Exception('Invalid reset tokens'));
                 }
                 # The token matches -- let's make them a new password and
                 # provide it.
@@ -2642,7 +2642,6 @@ class UserFunctions extends DBHelper
         return false;
     }
 
-
     private static function getPreferredCipherMethod()
     {
         /***
@@ -2656,17 +2655,17 @@ class UserFunctions extends DBHelper
          ***/
         # TODO method to determine best cipher method
         $methods = openssl_get_cipher_methods();
-        $testPass = "123abc";
-        $testString = "FooBar";
+        $testPass = '123abc';
+        $testString = 'FooBar';
         $testIV = sha1($testString);
         $testMethods = array(
             'AES-256-CBC-HMAC-SHA1',
-            "AES-128-CBC-HMAC-SHA1",
-            "AES-256-CBC",
-            "AES-192-CBC",
-            "AES-128-CBC",
+            'AES-128-CBC-HMAC-SHA1',
+            'AES-256-CBC',
+            'AES-192-CBC',
+            'AES-128-CBC',
         );
-        foreach($testMethods as $method) {
+        foreach ($testMethods as $method) {
             $iv = self::getIV($testIV, $method);
             $foo = openssl_encrypt($testString, $method, $testPass, 0, $iv);
             $bar = openssl_decrypt($foo, $method, $testPass, 0, $iv);
@@ -2676,17 +2675,23 @@ class UserFunctions extends DBHelper
         }
     }
 
-    public function getIV($base = null, $method = null) {
+    public function getIV($base = null, $method = null)
+    {
         /***
          *
          ***/
-        if (empty($base)) $base = $this->getUserSeed();
-        if (empty($method)) $method = self::getPreferredCipherMethod();
+        if (empty($base)) {
+            $base = $this->getUserSeed();
+        }
+        if (empty($method)) {
+            $method = self::getPreferredCipherMethod();
+        }
         $length = openssl_cipher_iv_length($method);
-        while(strlen($base) < $length) {
-            $base .= hash("sha512", $base);
+        while (strlen($base) < $length) {
+            $base .= hash('sha512', $base);
         }
         $iv = substr($base, 0, $length);
+
         return $iv;
     }
 
