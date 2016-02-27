@@ -287,7 +287,7 @@ if (!function_exists('displayDebug')) {
 }
 
 if (!function_exists('do_post_request')) {
-    function do_post_request($url, $data, $optional_headers = null)
+    function do_post_request($url, $data, $method = "POST", $optional_headers = null)
     {
         /***
          * Do a POST request
@@ -299,7 +299,7 @@ if (!function_exists('do_post_request')) {
         $bareUrl = $url;
         $url = urlencode($url);
         $params = array('http' => array(
-            'method' => 'POST',
+            'method' => $method,
             'content' => http_build_query($data),
             'header'  => 'Content-type: application/x-www-form-urlencoded',
         ));
@@ -310,6 +310,7 @@ if (!function_exists('do_post_request')) {
         # If url handlers are set,t his whole next part can be file_get_contents($url,false,$ctx)
         try {
             ini_set("default_socket_timeout",3);
+            ini_set("allow_url_fopen", true);
             $response = file_get_contents($bareUrl,false,$ctx);
             if(empty($response) || $response === false) throw new Exception("No Response from file_get_contents");
         } catch (Exception $e) {
@@ -324,7 +325,7 @@ if (!function_exists('do_post_request')) {
                 else if (function_exists("curl_init")) {
                     # Last-ditch: CURL
                     $ch = curl_init( $bareUrl );
-                    curl_setopt( $ch, CURLOPT_POST, 1);
+                    if($method == "POST") curl_setopt( $ch, CURLOPT_POST, 1);
                     curl_setopt( $ch, CURLOPT_POSTFIELDS, http_build_query($data));
                     curl_setopt( $ch, CURLOPT_FOLLOWLOCATION, 1);
                     curl_setopt( $ch, CURLOPT_HEADER, 0);
@@ -342,19 +343,21 @@ if (!function_exists('do_post_request')) {
             }
         }
         return $response;
-    }    
+    }
 }
 
 if (!function_exists('deEscape')) {
     function deEscape($input)
     {
         $find = array(
+            "&amp;#",
             "&#39;",
             "&#34;",
             "&#95;",
             "&#37;"
         );
         $replace = array(
+            "&#",
             "'",
             "\"",
             "_",
