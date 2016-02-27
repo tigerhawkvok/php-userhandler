@@ -775,7 +775,7 @@ if ($debug) $login_output .= "<pre>".displayDebug($resp)."</pre>";
       <button id='add_totp_button' class='totpbutton btn btn-primary'>Add Two-Factor Authentication</button>
     </fieldset>
   </form>
-  <div class='alert col-xs-12 col-md-6 force-center'>
+  <div class='col-xs-12 col-md-6 force-center'>
     <button id='totp_help' class='alert-link btn btn-link'>Help with Two-Factor Authentication</button>
   </div>
 </section>";
@@ -861,7 +861,7 @@ else if(isset($_REQUEST['2fa']))
       <button id='add_totp_button' class='totpbutton btn btn-primary'>Add Two-Factor Authentication</button>
     </fieldset>
   </form>
-  <div class='alert force-center col-xs-12 col-md-6'>
+  <div class='force-center col-xs-12 col-md-6'>
     <button id='totp_help' class='alert-link btn btn-link'>Help with Two-Factor Authentication</button>
   </div>
 </section>";
