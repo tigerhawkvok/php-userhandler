@@ -47,34 +47,51 @@ if ($allow_insecure_connections !== true) {
     }
 }
 
-function returnAjax($data)
-{
-    if (!is_array($data)) {
-        $data = array($data);
+if(!function_exists("returnAjax")) {
+    function returnAjax($data)
+    {
+        if (!is_array($data)) {
+            $data = array($data);
+        }
+        $data['execution_time'] = elapsed();
+        $data['completed'] = microtime_float();
+        global $do;
+        $data['requested_action'] = $do;
+        $data['args_provided'] = $_REQUEST;
+        if (!isset($data['status'])) {
+            $data['status'] = false;
+            $data['error'] = 'Server returned null or otherwise no status.';
+            $data['human_error'] = "Server didn't respond correctly. Please try again.";
+            $data['app_error_code'] = -10;
+        }
+        header('Cache-Control: no-cache, must-revalidate');
+        header('Expires: Mon, 26 Jul 1997 05:00:00 GMT');
+        header('Content-type: application/json');
+        global $billingTokens;
+        if (is_array($billingTokens)) {
+            $data['billing_meta'] = $billingTokens;
+        }
+        // try {
+        //     foreach($data as $col=>$val) {
+        //         $data[$col] = deEscape($val);
+        //     }
+        // } catch (Exception $e) {
+        // }
+        $json = json_encode($data,JSON_FORCE_OBJECT);
+        $replace_array = array("&quot;","&#34;");
+        $deescaped = htmlspecialchars_decode(html_entity_decode($json));
+        $dequoted = str_replace($replace_array,"\\\"",$deescaped);
+        $dequoted_bare = str_replace($replace_array,"\\\"",$json);
+        $de2 = htmlspecialchars_decode(html_entity_decode($dequoted_bare));
+        #print $deescaped;
+        # print $dequoted_bare;
+        print $de2;
+        exit();
     }
-    $data['execution_time'] = elapsed();
-    $data['completed'] = microtime_float();
-    global $do;
-    $data['requested_action'] = $do;
-    $data['args_provided'] = $_REQUEST;
-    if (!isset($data['status'])) {
-        $data['status'] = false;
-        $data['error'] = 'Server returned null or otherwise no status.';
-        $data['human_error'] = "Server didn't respond correctly. Please try again.";
-        $data['app_error_code'] = -10;
-    }
-    header('Cache-Control: no-cache, must-revalidate');
-    header('Expires: Mon, 26 Jul 1997 05:00:00 GMT');
-    header('Content-type: application/json');
-    global $billingTokens;
-    if (is_array($billingTokens)) {
-        $data['billing_meta'] = $billingTokens;
-    }
-    print @json_encode($data, JSON_FORCE_OBJECT);
-    exit();
-}
+  }
 
 parse_str($_SERVER['QUERY_STRING'], $_GET);
+$_REQUEST = array_merge($_REQUEST, $_GET, $_POST);
 $do = isset($_REQUEST['action']) ? strtolower($_REQUEST['action']) : null;
 
 if ($print_login_state === true) {
@@ -82,6 +99,9 @@ if ($print_login_state === true) {
       case 'get_login_status':
         returnAjax(getLoginState($_REQUEST));
         break;
+      case "login":
+          returnAjax( doAsyncLogin($_REQUEST) );
+          break;
       case 'write':
         returnAjax(saveToUser($_REQUEST));
         break;
@@ -112,6 +132,12 @@ if ($print_login_state === true) {
       case 'verifyphone':
         returnAjax(verifyPhone($_REQUEST));
         break;
+      case 'verifyemail':
+        returnAjax(verifyEmail($_REQUEST));
+        break;
+      case 'addalternateemail':
+          returnAjax(addAlternateEmail($_REQUEST));
+          break;
       case 'removeaccount':
         returnAjax(removeAccount($_REQUEST));
         break;
@@ -132,6 +158,21 @@ if ($print_login_state === true) {
       }
 }
 
+function doAsyncLogin($get) {
+    $u = new UserFunctions();
+    $totp = empty($get["totp"]) ? false : $get["totp"];
+    $r = $u->lookupUser($get["username"], $get["password"], true, $totp);
+    if ($r["status"] === true) {
+        $return = $u->createCookieTokens($r["data"]);
+        unset($return["source"]);
+        unset($return["raw_cookie"]);
+        unset($return["basis"]);
+    } else {
+        $return = $r;
+    }
+    returnAjax($return);
+}
+
 function getLoginState($get, $default = false)
 {
     global $login_url;
@@ -148,12 +189,39 @@ function getLoginState($get, $default = false)
         unset($userDetail['userdata']['secdata']);
         unset($userDetail['userdata']['emergency_code']);
         unset($userDetail['userdata']['auth_key']);
+        unset($userDetail['userdata']['data']);
+        unset($userDetail['userdata']['private_key']);
+        unset($userDetail['userdata']['random_seed']);
+        unset($userDetail['userdata']['special_1']);
+        unset($userDetail['userdata']['special_2']);
+        unset($userDetail['userdata']['app_key']);
+        unset($userDetail['userdata']['phone_verified']);
+        unset($userDetail['userdata']['last_ip']);
+        unset($userDetail['source']);
+        unset($userDetail['salt']);
+        unset($userDetail['calc_conf']);
+        unset($userDetail['basis_conf']);
+        unset($userDetail['iv']);
     } catch (Exception $e) {
         # Do nothing, that unset just failed
       $userDetail = $e->getMessage();
     }
 
-    return array('status' => $loginStatus,'defaulted' => $default,'login_url' => $login_url,'detail' => $userDetail);
+    $response = array(
+        'status' => $loginStatus,
+        'defaulted' => $default,
+        'login_url' => $login_url,
+        'detail' => $userDetail,
+        "unrestricted" => $u->meetsRestrictionCriteria(),
+        "has_alternate" => $u->hasAlternateEmail(),
+        "email_allowed" => $u->emailIsAllowed(),
+        "alternate_allowed" => $u->alternateIsAllowed(),
+        "restriction_criteria" => $u->getRestrictionCriteria(),
+    );
+    if($default) {
+        $response["provided_arguments"] = $_REQUEST;
+    }
+    return $response;
 }
 
 function hasTOTP($get)
@@ -313,13 +381,65 @@ function sendTOTPText($get)
   }
 }
 
+
+function addAlternateEmail($get) {
+    $alternate = $get["email"];
+    $user = $get["username"];
+    if(empty($get["username"])) {
+        return array(
+            "status" => false,
+            "error" => "INVALID_PARAMETERS",
+            "human_error" => "This function needs the parameter 'username' specified.",
+        );
+    }
+    $u = new UserFunctions();
+    if($u->getUsername() != $user) {
+        return array(
+            "status" => false,
+            "error" => "NOT_LOGGED_IN",
+            "human_error" => "Sorry, you must be logged in to add an alternate email",
+        );
+    }
+    return $u->setAlternateEmail($alternate);
+}
+
+function verifyEmail($get)
+{
+    /***
+     * Verify an email
+     * An empty or bad verification code generates a new one to be saved in the temp column
+     ***/
+    if(!isset($get["alternate"])) {
+        $get["alternate"] = false;
+    } else {
+        $get["alternate"] = toBool($get["alternate"]);
+    }
+    if(empty($get["username"])) {
+        return array(
+            "status" => false,
+            "error" => "INVALID_PARAMETERS",
+            "human_error" => "This function needs the parameter 'username' specified.",
+        );
+    }
+    $u = new UserFunctions($get['username']);
+    try {
+        return $u->verifyEmail($get['token'], $get['alternate']);
+    } catch (Exception $e) {
+        return array(
+            "status" => false,
+            "error" => $e->getMessage(),
+            "human_error" => "Unable to send verification email",
+        );
+    }
+}
+
 function verifyPhone($get)
 {
     /***
-   * Verify a phone number.
-   * An empty or bad verification code generates a new one to be saved in the temp column
-   ***/
-  $u = new UserFunctions($get['username']);
+     * Verify a phone number.
+     * An empty or bad verification code generates a new one to be saved in the temp column
+     ***/
+    $u = new UserFunctions($get['username']);
     try {
         return $u->verifyPhone($get['auth']);
     } catch (Exception $e) {

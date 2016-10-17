@@ -21,7 +21,7 @@ class UserFunctions extends DBHelper
      *                         (string)"url" (defaults to "localhost")
      *                         and (array)"cols" of type "column_name"=>"type".
      ***/
-    global $user_data_storage,$profile_picture_storage,$site_security_token,$service_email,$minimum_password_length,$password_threshold_length,$db_cols,$default_user_table,$default_user_database,$password_column,$cookie_ver_column,$user_column,$totp_column,$totp_steps,$temporary_storage,$needs_manual_authentication,$totp_rescue,$ip_record,$default_user_database,$default_sql_user,$default_sql_password,$sql_url,$default_user_table,$baseurl,$twilio_sid,$twilio_token,$twilio_number,$site_name,$link_column,$app_column;
+        global $user_data_storage,$profile_picture_storage,$site_security_token,$service_email,$minimum_password_length,$password_threshold_length,$db_cols,$default_user_table,$default_user_database,$password_column,$cookie_ver_column,$user_column,$totp_column,$totp_steps,$temporary_storage,$needs_manual_authentication,$totp_rescue,$ip_record,$default_user_database,$default_sql_user,$default_sql_password,$sql_url,$default_user_table,$baseurl,$twilio_sid,$twilio_token,$twilio_number,$site_name,$link_column,$app_column, $allowedEmailDomains, $allowedEmailTLDs;
     # Set up the parameters in CONFIG.php
     $config_path = dirname(__FILE__).'/../CONFIG.php';
         require_once $config_path;
@@ -116,6 +116,8 @@ class UserFunctions extends DBHelper
         $this->site = $site_name;
         $this->appKeyColumn = $app_column;
         $this->userlink = null;
+        $this->allowedTLDs = $allowedEmailTLDs;
+        $this->allowedDomains = $allowedEmailDomains;
 
         $proto = 'http';
         if (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] == 'on') {
@@ -257,6 +259,8 @@ class UserFunctions extends DBHelper
         return array('status' => true);
     }
 
+
+
     public function has2FA()
     {
         $userdata = $this->getUser();
@@ -272,15 +276,15 @@ class UserFunctions extends DBHelper
      * @return array of the user result column
      ***/
 
-    if (empty($this->user) || !empty($user_id)) {
-        $this->setUser($user_id);
-    } elseif (empty($this->user)) {
-        # Try a cookie
-        $cookielink = $this->domain.'_link';
-        $altcookielink = str_replace('.', '_', $this->domain).'_link';
-        $ucookielink = empty($_COOKIE[$cookielink]) ? $altcookielink : $cookielink;
-        $this->setUser($ucookielink);
-    }
+        if (empty($this->user) || !empty($user_id)) {
+            $this->setUser($user_id);
+        } elseif (empty($this->user)) {
+            # Try a cookie
+            $cookielink = $this->domain.'_link';
+            $altcookielink = str_replace('.', '_', $this->domain).'_link';
+            $ucookielink = empty($_COOKIE[$cookielink]) ? $altcookielink : $cookielink;
+            $this->setUser($ucookielink);
+        }
         $userdata = $this->user;
         $userdata['img'] = $this->getUserPicture();
         if (!array($userdata)) {
@@ -374,6 +378,51 @@ class UserFunctions extends DBHelper
         //     }
         // }
         return $link;
+    }
+
+    protected function getNameTag($tag = "name") {
+        $userdata = $this->getUser();
+        if(!is_array($userdata)) return false;
+        $nameXml = $userdata["name"];
+        $xml = new Xml();
+        $xml->setXml($nameXml);
+        return $xml->getTagContents($tag);
+    }
+
+    public function getName() {
+        return $this->getNameTag("name");
+    }
+
+    public function getFirstName() {
+        return $this->getNameTag("fname");
+    }
+
+    public function getLastName() {
+        return $this->getNameTag("lname");
+    }
+
+    public function getProfile() {
+        /***
+         * Returns the public_profile of the userdata
+         ***/
+        # Are profiles configured?
+        if(!$this->columnExists("public_profile")) {
+            return false;
+        }
+        $userdata = $this->getUser();
+        $profile = $userdata["public_profile"];
+        $jProfile = json_decode($profile, true);
+        return is_array($jProfile) ? $jProfile : false;
+    }
+
+    private function getUserWhere() {
+        return " WHERE `".$this->linkColumn."`='".$this->getHardlink()."'";
+    }
+
+
+    public static function isValidEmail($email, $maxLength = 100) {
+        $preg = "/[a-z0-9!#$%&'*+=?^_`{|}~-]+(?:\.[a-z0-9!#$%&'*+=?^_`{|}~-]+)*@(?:[a-z0-9](?:[a-z0-9-]*[a-z0-9])?\.)+(?:[a-z]{2}|com|org|net|edu|gov|mil|biz|info|mobi|name|aero|asia|jobs|museum)\b/";
+        return preg_match($preg, $email) == 1 && strlen($email) <= $maxLength;
     }
 
     public function getPhone()
@@ -882,7 +931,7 @@ class UserFunctions extends DBHelper
     ***/
     $user = $this->sanitize($username);
       $preg = "/[a-z0-9!#$%&'*+=?^_`{|}~-]+(?:\.[a-z0-9!#$%&'*+=?^_`{|}~-]+)*@(?:[a-z0-9](?:[a-z0-9-]*[a-z0-9])?\.)+(?:[a-z]{2}|com|org|net|edu|gov|mil|biz|info|mobi|name|aero|asia|jobs|museum)\b/";
-      if (preg_match($preg, $username) != 1 || strlen($username) > 100) {
+      if (!self::isValidEmail($username)) {
           return array('status' => false,'error' => 'Your email is not a valid email address. Please try again.');
       } else {
           $username = $user;
@@ -1194,6 +1243,370 @@ class UserFunctions extends DBHelper
         }
     }
 
+
+    public function hasAlternateEmail() {
+        $key = "alternate_email";
+        if($this->columnExists($key) !== true) {
+            $this->addColumn($key, "varchar(255)");
+        }
+        try {
+            $u = $this->getUser();
+        } catch (Exception $e) {
+            return false;
+        }
+        return !empty($u[$key]);
+    }
+
+    public function verifyEmail($auth_code = null, $alternate = false) {
+        if($alternate === true) {
+            if(!$this->hasAlternateEmail()) return array(
+                "status" => false,
+                "is_good" => false,
+                "error" => "NO_ALTERNATE_EMAIL",
+                "human_error" => "This user has no alternate email",
+            );
+        }
+        if($alternate === true) {
+            $email = $this->getAlternateEmail();
+        } else {
+            $email = $this->getUsername();
+        }
+        if($this->isVerified($alternate) === true) {
+            return array(
+                "status" => false,
+                "is_good" => true,
+                "error" => "ALREADY_VERIFIED",
+                "human_error" => "You've already verified " . $email,
+                "meets_restriction_criteria" => $this->meetsRestrictionCriteria(),
+                "email" => $email,
+            );
+        }
+        if(empty($auth_code)) {
+            return $this->sendEmailVerification($alternate);
+        } else {
+            # Check it
+            $response = array(
+                "status" => false,
+                "verification_action" => "VALIDATE_CODE",
+                "auth_code" => $auth_code,
+                "alternate" => $alternate,
+                "email" => $email,
+            );
+            $secret = $this->getSecret(true);
+            if($auth_code == $secret) {
+                # Good
+                $response["is_good"] = true;
+                # Update the column
+                $lookup = array($this->userColumn => $this->getUsername());
+                $key = $alternate ? "alternate_email_verified" : "email_verified";
+                $query = "UPDATE `".$this->getTable()."` SET `".$key."` = TRUE ".$this->getUserWhere();
+                $r = mysqli_query($this->getLink(), $query);
+                if($r === false) {
+                    $reponse["error"] = mysqli_error($this->getLink());
+                    $reponse["human_error"] = "Error updating verified status";
+                } else {
+                    $response["status"] = true;
+                    if($this->isVerified($alternate)) $this->setTempSecret("");
+                }
+                $response["is_verified"] = $this->isVerified($alternate);
+                $response["meets_restriction_criteria"] = $this->meetsRestrictionCriteria();
+            } else {
+                # Bad
+                $response["error"] = "BAD_AUTH_CODE";
+                $response["human_error"] = "Invalid authorization code";
+            }
+            return $response;
+        }
+    }
+
+
+    public function sendEmailVerification($alternate = false) {
+        /***
+         *
+         ***/
+
+        if (!class_exists('Stronghash')) {
+            require_once dirname(__FILE__).'/../core/stronghash/php-stronghash.php';
+        }
+        $auth = Stronghash::createSalt(32);
+        $r = $this->setTempSecret($auth);
+        if ($r["status"] === false) {
+            throw(new Exception('Could not prepare authorization code - '.$r['error']));
+        }
+        $mail = $this->getMailObject();
+        $mail_subject = '['.$this->getDomain().'] Verify Your Email';
+        $mail->Subject = $mail_subject;
+        include dirname(__FILE__).'/../CONFIG.php';
+        $url = !isset($login_url) ? 'login.php' : $login_url;
+        $rel_dir = str_replace($relative_path, '', $working_subdirectory);
+        if (substr($rel_dir, -1) != '/' && !empty($rel_dir)) {
+            $rel_dir = $rel_dir.'/';
+        }
+        $link = $this->getQualifiedDomain().$rel_dir.$url.'?action=verifyemail&alternate='.strbool($alternate).'&token='.$auth.'&username='.$this->getUsername();
+        $explanation = $alternate ? "<strong>".$this->getAlternateEmail()."</strong> as an alias of ".$this->getUsername() : "<strong>".$this->getUsername()."</strong>";
+        $body = "<html><head><link rel=\"stylesheet\" href=\"https://maxcdn.bootstrapcdn.com/bootstrap/3.3.6/css/bootstrap.min.css\" integrity=\"sha384-1q8mTJOASx8j1Au+a5WDVnPi2lkFfwwEAa8hDDdjZlpLegxhjVME1fgjWPGmkzs7\" crossorigin=\"anonymous\"/></head><body><p>Thanks for verifying! We're sending this email to ".$explanation." to verify ownership of this email. Click <a href='".$link."' class='btn btn-primary'>this link to verify</a>, or enter the following into your verification page:</p>\n<p class='text-center'><code>$auth</code></p><p>If you did not request this email, feel free to ignore it.</p></body></html>";
+        $mail->Body = $body;
+        $u = $this->getUser();
+        $email = $alternate ? $u["alternate_email"] : $this->getUsername();
+        $mail->addAddress($email);
+        $success = $mail->send();
+        $error = $success ? null : $mail->ErrorInfo;
+        return array(
+            "status" => $success,
+            "error" => $error,
+            "verification_action" => "SEND_EMAIL",
+            "alternate" => $alternate,
+        );
+
+    }
+
+    public function isVerified($alternate = false) {
+        $key = $alternate ? "alternate_email_verified" : "email_verified";
+        $colCheck = array(
+            "key" => $key,
+            "exists" => $this->columnExists($key),
+            "query" => $this->columnExists($key, true),
+        );
+        if($colCheck['exists'] !== true) {
+            $r = $this->addColumn($key, "BOOLEAN", 0);
+            if($r["status"] !== true) {
+                $r['col_check'] = $colCheck;
+                return $r;
+            }
+        }
+        $u = $this->getUser();
+        return toBool($u[$key]);
+    }
+
+    public function meetsRestrictionCriteria() {
+        try {
+            if($this->isAdmin() || $this->isSU()) return true;
+            if($this->isVerified() !== true) return false;
+            if($this->hasAlternateEmail()) {
+                if($this->isVerified(true) === true) {
+                    $alternateMatch = $this->matchEmailAgainstRestrictions($this->getAlternateEmail());
+                    if($alternateMatch === true) return true;
+                }
+            }
+            return $this->matchEmailAgainstRestrictions($this->getUsername());
+        } catch (Exception $e) {
+            return false;
+        }
+    }
+
+    public function alternateIsAllowed() {
+        if($this->hasAlternateEmail()) {
+            return $this->matchEmailAgainstRestrictions($this->getAlternateEmail());
+        } else return false;
+    }
+
+    public function emailIsAllowed() {
+        return $this->matchEmailAgainstRestrictions($this->getUsername());
+    }
+
+    public function isAdmin() {
+        try {
+            $u = $this->getUser();
+            return toBool($u["admin_flag"]);
+        } catch (Exception $e) {
+            return false;
+        }
+    }
+
+    public function isSU() {
+        try {
+            $u = $this->getUser();
+            return toBool($u["su_flag"]);
+        } catch (Exception $e) {
+            return false;
+        }
+    }
+
+    public static function examineEmail($email) {
+        $domainParts = explode("@", $email);
+        $qualifiedDomain = array_pop($domainParts);
+        $domainBaseParts = explode(".", $qualifiedDomain);
+        $tld = array_pop($domainBaseParts);
+        while(sizeof($domainBaseParts) > 1) {
+            $tld2 = array_pop($domainBaseParts);
+            $tld = $tld2 . "." . $tld;
+        }
+        $domain = array_pop($domainBaseParts);
+        $response = array(
+            "tld" => $tld,
+            "domain" => $domain,
+            "email" => $email,
+
+        );
+        return $response;
+    }
+
+    public function examineEmailDeep($email) {
+        $domainParts = explode("@", $email);
+        $qualifiedDomain = array_pop($domainParts);
+        $domainBaseParts = explode(".", $qualifiedDomain);
+        $tld = array_pop($domainBaseParts);
+        $i = 1;
+        $tldTwo = null;
+        while(sizeof($domainBaseParts) > 1) {
+            $tld2 = array_pop($domainBaseParts);
+            $tld = $tld2 . "." . $tld;
+            ++$i;
+            if($i == 2) $tldTwo = $tld;
+        }
+        $domain = array_pop($domainBaseParts);
+        $response = array(
+            "tld" => $tld,
+            "tld2" => $tldTwo,
+            "domain" => $domain,
+            "email" => $email,
+            "allowedDomains" => $this->allowedDomains,
+            "allowedTLDs" => $this->allowedTLDs,
+        );
+        $status = null;
+        if(is_array($this->allowedDomains)) {
+            $response["checkedDomains"] = true;
+            if(sizeof($this->allowedDomains) > 0) {
+                # Match
+                $hasFullDomain = in_array($qualifiedDomain, $this->allowedDomains);
+                $hasBaseDomain = in_array($domain, $this->allowedDomains);
+                if(!($hasFullDomain || $hasBaseDomain)) $status = false;
+                else $response["validDomain"] = true;
+            } else $response["validDomain"] = null;
+        } else $response["checkedDomains"] = false;
+        if(is_array($this->allowedTLDs)) {
+            $response["checkTlds"] = true;
+            if(sizeof($this->allowedTLDs) > 0) {
+                # Regex substring
+                $imploded = implode("|", $this->allowedTLDs);
+                $matchTlds = str_replace(".","\.", $imploded);
+                $reg = '/[\w.]+@(\w+\.)+('.$matchTlds.')/';
+                $regMatch = boolstr(preg_match($reg, $email));
+                $response['reg'] = $reg;
+                $response['regMatch'] = $regMatch;
+                # Match
+                $baseTldMatch = in_array($tld, $this->allowedTLDs);
+                if(!empty($tldTwo)) {
+                    $europeTldMatch = in_array($tldTwo, $this->allowedTLDs);
+                } else $europeTldMatch = false;
+                if(!($baseTldMatch || $europeTldMatch || $regMatch)) $status = false;
+                else $response["validTld"] = true;
+            }
+        } else $response["checkTlds"] = false;
+        if ($status === null) $status = true;
+        $response["status"] = $status;
+        return $response;
+    }
+
+    private function matchEmailAgainstRestrictions($email) {
+        $domainParts = explode("@", $email);
+        $qualifiedDomain = array_pop($domainParts);
+        $domainBaseParts = explode(".", $qualifiedDomain);
+        $tld = array_pop($domainBaseParts);
+        $i = 1;
+        $tldTwo = null;
+        while(sizeof($domainBaseParts) > 1) {
+            $tld2 = array_pop($domainBaseParts);
+            $tld = $tld2 . "." . $tld;
+            ++$i;
+            if($i == 2) $tldTwo = $tld;
+        }
+        $domain = array_pop($domainBaseParts);
+        if(is_array($this->allowedDomains)) {
+            if(sizeof($this->allowedDomains) > 0) {
+                # Match
+                $hasFullDomain = in_array($qualifiedDomain, $this->allowedDomains);
+                $hasBaseDomain = in_array($domain, $this->allowedDomains);
+                if(!($hasFullDomain || $hasBaseDomain)) return false;
+            }
+        }
+        if(is_array($this->allowedTLDs)) {
+            if(sizeof($this->allowedTLDs) > 0) {
+                # Regex substring
+                $imploded = implode("|", $this->allowedTLDs);
+                $matchTlds = str_replace(".","\.", $imploded);
+                $reg = '/[\w.]+@(\w+\.)+('.$matchTlds.')/';
+                $regMatch = boolstr(preg_match($reg, $email));
+                # Match
+                $baseTldMatch = in_array($tld, $this->allowedTLDs);
+                if(!empty($tldTwo)) {
+                  $europeTldMatch = in_array($tldTwo, $this->allowedTLDs);
+                } else $europeTldMatch = false;
+                if(!($baseTldMatch || $europeTldMatch || $regMatch)) return false;
+            }
+        }
+        return true;
+    }
+
+    public function getRestrictionCriteria() {
+        $domains = "any";
+        if(is_array($this->allowedDomains)) {
+            if(sizeof($this->allowedDomains) > 0) {
+                $domains = implode(", ", $this->allowedDomains);
+            }
+        }
+        $tlds = "any";
+        if(is_array($this->allowedTLDs)) {
+            if(sizeof($this->allowedTLDs) > 0) {
+                $tlds = implode(", ", $this->allowedTLDs);
+            }
+        }
+        return array(
+            "domains" => $domains,
+            "tlds" => $tlds,
+        );
+
+    }
+
+    public function setAlternateEmail($email) {
+        $email = trim($email);
+        $email = $this->sanitize($email);
+        # Check it's an email
+        if(!self::isValidEmail($email)) {
+            return array(
+                "status" => false,
+                "error" => "INVALID_EMAIL",
+                "email" => $email,
+            );
+        }
+        # Write it to the DB
+        $response = array(
+            "status" => false,
+            "email" => $email,
+        );
+        $key = "alternate_email";
+        if($this->columnExists($key) !== true) {
+            $reponse["column"] = $this->addColumn($key, "varchar(255)");
+            if($response["column"]["status"] !== true) {
+                $response["error"] = "BAD_COLUMN";
+                $response["human_error"] = "Couldn't create column '$key'";
+                return $response;
+            }
+        }
+        $query = "UPDATE `".$this->getTable()."` SET `".$key."`='".$email."', `alternate_email_verified`=FALSE".$this->getUserWhere();
+
+        $this->invalidateLink();
+        $r = mysqli_query($this->getLink(), $query);
+
+        if($r === false) {
+            $response["status"] = false;
+            $response["error"] = mysqli_error($this->getLink());
+            $reponse["human_error"] = "Could not save alternate email";
+        } else {
+            $response["status"] = true;
+            $response["verification_status"] = $this->sendEmailVerification(true);
+        }
+        return $response;
+    }
+
+    public function getAlternateEmail() {
+        if($this->hasAlternateEmail()) {
+            $u = $this->getUser();
+            return $u["alternate_email"];
+        }
+        return false;
+    }
+
     public function getUserPicture($id = null, $path = null, $extra_types_array = null)
     {
         if (empty($id)) {
@@ -1217,6 +1630,44 @@ class UserFunctions extends DBHelper
         }
 
         return $this->qualDomain.$path.'default.png';
+    }
+
+    public function setImageAsUserPicture($image, $path = null) {
+        /***
+         * Sets an image as one for a user
+         *
+         * @param string $image -> filename for an image asset
+         * @param string $path -> path to $image
+         ***/
+        if (empty($path)) {
+            $path = $this->picture_path;
+        }
+        if(strpos($image, $path) === 0) {
+           $image = str_replace($path, "", $image);
+        }
+        $sourceImage = $path . $image;
+        $imageData = file_get_contents($sourceImage);
+        $iParts = explode(".", $image);
+        $extension = array_pop($iParts);
+        $imgUri = $path.$this->getHardlink().'.'.$extension;
+        $imgSmallUri = $path.$this->getHardlink().'-sm.'.$extension;
+        $imgTinyUri = $path.$this->getHardlink().'-xs.'.$extension;
+        try {
+            file_put_contents($imgUri, $imageData);
+            #rename($sourceImage, $imageUri);
+        } catch (Exception $e) {
+            return array('status' => false,'error' => $e->getMessage(),'human_error' => 'There was an error in processing your image','app_error_code' => 119,'path' => $path,'img_path' => $imgUri, "source" => $sourceImage);
+        }
+        try {
+            # Shrinkify image
+            require_once dirname(__FILE__).'/image_functions.php';
+            @resizeImage($imgUri, $imgSmallUri, 512, 512);
+            @resizeImage($imgUri, $imgTinyUri, 128, 128);
+
+            return array('status' => true, 'image_uri' => $imgUri, 'small_image_uri' => $imgSmallUri, 'tiny_image_uri' => $imgTinyUri, "source" => $sourceImage);
+        } catch (Exception $e) {
+            return array('status' => true,'image_uri' => $imgUri,'error' => $e->getMessage(),'human_error' => 'There was an error in shrinking your image','app_error_code' => 122,'path' => $path, "source" => $sourceImage);
+        }
     }
 
     public function setUserPicture($image, $path = null)
@@ -1342,11 +1793,15 @@ class UserFunctions extends DBHelper
             }
 
             $current_ip = $_SERVER['REMOTE_ADDR'];
+            $ipArray = explode(".", $current_ip);
+            array_pop($ipArray);
+            $ipTop = implode(".", $ipArray);
+            $current_ip = $ipTop;
 
         # Are they logging in from the same IP?
         if ($userdata[$this->ipColumn] != $current_ip) {
             if ($detail) {
-                return array('state' => false,'status' => false,'error' => 'Different IP address on login','uid' => $userid,'salt' => $salt,'calc_conf' => $conf,'basis_conf' => $hash,'have_secret' => self::strbool(!empty($secret)),'from_cookie' => self::strbool($from_cookie),'stored_ip' => $userdata[$this->ipColumn],'current_ip' => $current_ip);
+                return array('state' => false,'status' => false,'error' => 'Different IP address on login','uid' => $userid,'salt' => $salt,'calc_conf' => $conf,'basis_conf' => $hash,'have_secret' => self::strbool(!empty($secret)),'from_cookie' => self::strbool($from_cookie),'stored_ip' => $userdata[$this->ipColumn],'current_ip' => $current_ip, "full_current_ip" => $_SERVER['REMOTE_ADDR']);
             }
 
             return false;
@@ -1428,6 +1883,10 @@ class UserFunctions extends DBHelper
             $pw_characters = json_decode($userdata[$this->pwColumn], true);
             $salt = $pw_characters['salt'];
             $current_ip = empty($current_ip) ? $_SERVER['REMOTE_ADDR'] : $remote;
+            $ipArray = explode(".", $current_ip);
+            array_pop($ipArray);
+            $ipTop = implode(".", $ipArray);
+            $current_ip = $ipTop;
 
         # store it
         $query = 'UPDATE `'.$this->getTable().'` SET `'.$this->cookieColumn."`='$otsalt', `".$this->ipColumn."`='$current_ip', `last_login`='".microtime_float()."' WHERE id='$id'";
@@ -1502,6 +1961,7 @@ class UserFunctions extends DBHelper
                 'source' => $value_create,
                 'ip_given' => $remote,
                 'raw_auth' => $value,
+                'raw_uid' => $dblink,
                 'raw_secret' => $cookie_secret,
                 'raw_cookie' => $raw_data,
                 'basis' => $value_create,
@@ -1641,21 +2101,21 @@ class UserFunctions extends DBHelper
     public function writeToUser($data, $col, $validation_data = null, $replace = true, $alert_forbidden_column = true)
     {
 
-    /***
-     * Write data to a user column.
-     *
-     * @param string $data the data to be written
-     * @param string $col the database column to be written to
-     * @param array $validation_data data to verify access to the
-     * user. An array of "password"=>$password or manually provided
-     * cookie data with $this->linkColumn as the key. If this isn't
-     * provided, cookies are used.
-     * @param bool $replace whether to replace existing
-     * data. Otherwise, it appends. Default: true.
-     * @return
-     ***/
+        /***
+         * Write data to a user column.
+         *
+         * @param string $data the data to be written
+         * @param string $col the database column to be written to
+         * @param array $validation_data data to verify access to the
+         * user. An array of "password"=>$password or manually provided
+         * cookie data with $this->linkColumn as the key. If this isn't
+         * provided, cookies are used.
+         * @param bool $replace whether to replace existing
+         * data. Otherwise, it appends. Default: true.
+         * @return
+         ***/
 
-    $vmeta = false;
+        $vmeta = false;
         $error = false;
         if (empty($data) || empty($col)) {
             return array('status' => false,'error' => 'Bad request');
@@ -1664,14 +2124,14 @@ class UserFunctions extends DBHelper
         if (is_array($validation_data)) {
             if (array_key_exists($this->linkColumn, $validation_data) && !empty($validation_data[$this->linkColumn])) {
                 // confirm with validateUser();
-            $validated = $this->validateUser($validation_data[$this->linkColumn], $validation_data['hash'], $validation_data['secret']);
+                $validated = $this->validateUser($validation_data[$this->linkColumn], $validation_data['hash'], $validation_data['secret']);
                 $method = 'Confirmation token';
                 $where_col = $this->linkColumn;
                 $user = $validation_data[$this->linkColumn];
             } elseif (array_key_exists('password', $validation_data)) {
                 # confirm with lookupUser();
-            # If TOTP is enabled, this lookup will always fail ...
-            $vmeta = $this->lookupUser($validation_data['username'], $validation_data['password']);
+                # If TOTP is enabled, this lookup will always fail ...
+                $vmeta = $this->lookupUser($validation_data['username'], $validation_data['password']);
                 $validated = $vmeta[0];
                 if ($validated) {
                     $this->getUser(array('username' => $validation_data['username']));
@@ -1679,11 +2139,11 @@ class UserFunctions extends DBHelper
                 $method = 'Password';
             } elseif (array_key_exists('application_verification', $validation_data)) {
                 # The user is accessing through an app. Check the
-          # verification chain.
-          $status = $this->verifyApp($validation_data['application_verification']);
+                # verification chain.
+                $status = $this->verifyApp($validation_data['application_verification']);
                 if ($status['status'] !== true) {
                     // array("status"=>false,"error"=>"Bad application verification","human_error"=>"There was a problem verifying the application","app_error_code"=>106);
-              return $status;
+                    return $status;
                 }
             } else {
                 return array('status' => false,'error' => 'Bad validation data');
@@ -1699,21 +2159,21 @@ class UserFunctions extends DBHelper
             if (empty($user)) {
                 return array('status' => false,'error' => 'Problem assigning user');
             }
-        // write it to the db
-        // replace or append based on flag
-        $real_col = $this->sanitize($col, true);
+            // write it to the db
+            // replace or append based on flag
+            $real_col = $this->sanitize($col, true);
             if (!$replace) {
                 # pull the existing data ...
-            $l = $this->openDB();
+                $l = $this->openDB();
                 $prequery = "SELECT `$real_col` FROM `".$this->getTable()."` WHERE `$where_col`='$user'";
-            # Look for relevent JSON entries or XML entries and replace them
-            $r = mysqli_query($l, $prequery);
+                # Look for relevent JSON entries or XML entries and replace them
+                $r = mysqli_query($l, $prequery);
                 $row = mysqli_fetch_row($r);
                 $d = $row[0];
                 $jd = json_decode($d, true);
                 if ($jd == null) {
                     # XML -- only takes one tag in!!
-                $xml_data = explode('</', $data);
+                    $xml_data = explode('</', $data);
                     $tag = array_pop($xml_data);
                     $tag = $this->sanitize(substr($tag, 0, -1));
                     $tag = '<'.$tag.'>';
@@ -2053,7 +2513,7 @@ class UserFunctions extends DBHelper
                     // $faz = self::encryptThis("FooBar", $testPass, $this->getIV());
                     // $baz = self::decryptThis($faz, $testPass);
                     #throw( new Exception('Invalid reset tokens (got '.$string.' and match '.$match_token.' from '.$salt.' and '.$secret.' [input->'.$key.':'.$verify.' with iv '.$this->getIV().']). Tested '.$foo.' decoding to '.$bar.' with '.$method. " (64: $foo64 to $bar64 to $barTrim64 vs ".$barTrim.") Also $faz -> $baz and " . openssl_error_string() ) );
-                    throw(new Exception('Invalid reset tokens'));
+                    throw( new Exception('Invalid reset tokens') );
                 }
                 # The token matches -- let's make them a new password and
                 # provide it.
@@ -2238,14 +2698,14 @@ class UserFunctions extends DBHelper
     public function removeThisAccount($username, $password, $totp = false)
     {
         /***
-     * Remove a user account
-     *
-     * @param string username the same username as this object's
-     * @param string password the user's password
-     * @param int totp the TOTP code
-     * @return array
-     ***/
-    $userdata = $this->getUser();
+         * Remove a user account
+         *
+         * @param string username the same username as this object's
+         * @param string password the user's password
+         * @param int totp the TOTP code
+         * @return array
+         ***/
+        $userdata = $this->getUser();
         if ($this->getUsername() != $username) {
             return array('status' => false,'error' => 'Nonmatching names');
         }
@@ -2269,14 +2729,39 @@ class UserFunctions extends DBHelper
         if ($lookup[0] !== true) {
             return array('status' => false,'error' => 'Bad lookup','lookup' => $lookup);
         }
-    # This is the same user the object was called on, and they're
-    # logged in validly
-    $query = 'DELETE FROM `'.$this->getTable().'` '.$where.' LIMIT 1';
+        # This is the same user the object was called on, and they're
+        # logged in validly
+        $query = 'DELETE FROM `'.$this->getTable().'` '.$this->getUserWhere().' LIMIT 1';
         $status = mysqli_query($l, $query);
         if ($status !== true) {
             return array('status' => $status,'error' => mysqli_error($l));
         } else {
             return array('status' => $status);
+        }
+    }
+
+    public function forceDeleteCurrentUser($confirm = false) {
+        /***
+         * Deletes a user. Does no checks in the process.
+         *
+         * @param bool $confirm -> must be true to execute
+         ***/
+        if(!$confirm) {
+            return array(
+                "status" => false,
+                "error" => "CONFIRM_FLAG_NOT_SET",
+                "target_user" => $this->getHardlink(),
+            );
+        }
+        $l = $this->openDB();
+        $targetHardlink = $this->getHardlink();
+        $userWhere = $this->getUserWhere();
+        $query = 'DELETE FROM `'.$this->getTable().'` '.$userWhere.' LIMIT 1';
+        $status = mysqli_query($l, $query);
+        if ($status !== true) {
+            return array('status' => $status,'error' => mysqli_error($l), "target_user" => $targetHardlink, "selector" => $userWhere);
+        } else {
+            return array('status' => $status, "deleted_user" => $targetHardlink, "selector" => $userWhere);
         }
     }
 
@@ -2642,6 +3127,7 @@ class UserFunctions extends DBHelper
         return false;
     }
 
+
     private static function getPreferredCipherMethod()
     {
         /***
@@ -2655,17 +3141,17 @@ class UserFunctions extends DBHelper
          ***/
         # TODO method to determine best cipher method
         $methods = openssl_get_cipher_methods();
-        $testPass = '123abc';
-        $testString = 'FooBar';
+        $testPass = "123abc";
+        $testString = "FooBar";
         $testIV = sha1($testString);
         $testMethods = array(
             'AES-256-CBC-HMAC-SHA1',
-            'AES-128-CBC-HMAC-SHA1',
-            'AES-256-CBC',
-            'AES-192-CBC',
-            'AES-128-CBC',
+            "AES-128-CBC-HMAC-SHA1",
+            "AES-256-CBC",
+            "AES-192-CBC",
+            "AES-128-CBC",
         );
-        foreach ($testMethods as $method) {
+        foreach($testMethods as $method) {
             $iv = self::getIV($testIV, $method);
             $foo = openssl_encrypt($testString, $method, $testPass, 0, $iv);
             $bar = openssl_decrypt($foo, $method, $testPass, 0, $iv);
@@ -2675,23 +3161,17 @@ class UserFunctions extends DBHelper
         }
     }
 
-    public function getIV($base = null, $method = null)
-    {
+    public function getIV($base = null, $method = null) {
         /***
          *
          ***/
-        if (empty($base)) {
-            $base = $this->getUserSeed();
-        }
-        if (empty($method)) {
-            $method = self::getPreferredCipherMethod();
-        }
+        if (empty($base)) $base = $this->getUserSeed();
+        if (empty($method)) $method = self::getPreferredCipherMethod();
         $length = openssl_cipher_iv_length($method);
-        while (strlen($base) < $length) {
-            $base .= hash('sha512', $base);
+        while(strlen($base) < $length) {
+            $base .= hash("sha512", $base);
         }
         $iv = substr($base, 0, $length);
-
         return $iv;
     }
 

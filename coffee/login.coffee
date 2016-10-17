@@ -557,7 +557,7 @@ removeAccount = (caller,cookie_key,has2fa = true) ->
   removal_button = "remove_acct_button"
   section_id = "remove_account_section"
   tfaBlock = if has2fa then "\n      <input type='text' id='code' name='code' placeholder='Authenticator Code or Backup Code' size='32' maxlength='32' autocomplete='off'/><br/>" else ""
-  html = "<section id='#{section_id}'>\n  <p id='remove_message' class='error'>Are you sure you want to remove your account?</p>\n  <form id='account_remove' onsubmit='event.preventDefault();'>\n    <fieldset>\n      <legend>Remove My Account</legend>\n      <input type='email' value='#{username}' readonly='readonly' id='username' name='username'/><br/>\n      <input type='password' id='password' name='password' placeholder='Password'/><br/>#{tfaBlock}\n      <button id='#{removal_button}' class='totpbutton btn btn-danger'>Remove My Account Permanantly</button> <button onclick=\"window.location.href=totpParams.home\" class='btn btn-primary'>Back to Safety</button>\n    </fieldset>\n  </form>\n</section>"
+  html = "<section id='#{section_id}'>\n  <div id='remove_message' class='alert alert-danger col-xs-12'>Are you sure you want to remove your account?</div>\n  <form id='account_remove' onsubmit='event.preventDefault();' class='form col-xs-12'>\n    <fieldset>\n      <legend>Remove My Account</legend>\n     <label for='username' class='sr-only'>Username</label> <input type='email' value='#{username}' readonly='readonly' id='username' name='username' class='form-control'/><br/>\n      <label for='password' class='sr-only'>Password:</label><input type='password' id='password' name='password' placeholder='Password' class='form-control'/><br/>#{tfaBlock}\n      <button id='#{removal_button}' class='totpbutton btn btn-danger'>Remove My Account Permanantly</button> <button onclick=\"window.location.href=totpParams.home\" class='btn btn-primary'>Back to Safety</button>\n    </fieldset>\n  </form>\n</section>"
   if $("#login_block").exists()
     $("#login_block").replaceWith(html)
   else
@@ -927,7 +927,13 @@ finishPasswordResetHandler = ->
     html = """
     <div class="alert alert-success">
       <button type="button" class="close" data-dismiss="alert" aria-label="Close"><span aria-hidden="true">&times;</span></button>
-      <strong>Your password has been successfully reset</strong> Your new password is <strong>#{result.new_password}</strong>. Write this down! You will NOT be able to generate or see this password again.<br/><br/>When you're done, <a href="#{apiUri.urlString}" class="alert-link">return to the login page</a> and log in with your new password.
+      <strong>Your password has been successfully reset</strong> Your new password is
+      <br/><br/>
+      <input type="text" value="#{result.new_password}" class="form-control form-inline code" readonly />
+      <br/><br/>
+      Write this down! You will NOT be able to generate or see this password again.<br/><br/>When you're done, <a href="#{apiUri.urlString}" class="alert-link">click here to return to the login page</a> and log in with your new password.
+      <br/><br/>
+      We highly recommend changing your password in Account Settings once you've logged in.
     </div>
     """
     $("#login").replaceWith(html)
@@ -1059,6 +1065,203 @@ finishChangePassword = ->
   false
 
 
+###################################
+# Verification
+###################################
+
+if typeof window.stopLoad is "function"
+  stopLoad = window.stopLoad
+unless typeof startLoad is "function"
+  startLoad = window.startLoad
+if typeof window.stopLoadError is "function"
+  stopLoadError = window.stopLoadError
+unless typeof toastStatusMessage is "function"
+  toastStatusMessage = window.toastStatusMessage
+unless typeof toastStatusMessage is "function"
+  toastStatusMessage = window.bsAlert
+
+verifyEmail = (caller) ->
+  isAlternate = $(caller).attr("data-alternate").toBool()
+  user = $(caller).attr "data-user"
+  args = "action=verifyemail&username=#{encodeURIComponent(user)}&alternate=#{isAlternate}"
+  validateEmailCode = ->
+    code = $("#verify-email-code").val().trim()
+    args += "&token=#{code}"
+    $.post apiUri.apiTarget, args, "json"
+    .done (result) ->
+      if result.is_good is true
+        if result.status is false
+          # Already validated
+          stopLoad()
+          try
+            toastStatusMessage "You're already verified"
+        else
+          try
+            toastStatusMessage "Verification successful"
+        $("#verify-email-filler").remove()
+        html = """
+         <span class='glyphicon glyphicon-check text-success' data-toggle='tooltip' title='Verified Email'></span>
+        """
+        if result.meets_restriction_criteria
+          html += """
+           <span class='glyphicon glyphicon-star' data-toggle='tooltip' title='Unrestricted User'></span>
+          """
+        $(caller).append html
+        $(caller).find(".verify-email").remove()
+      else
+        try
+          stopLoadError result.human_error
+        catch
+          stopLoadError()
+      stopLoad()
+      false
+    .fail (result, status) ->
+      try
+        stopLoadError "Sorry, we couldn't verify your email at this time"
+      catch
+        stopLoadError()
+      false
+    false
+  # Post it
+  try
+    startLoad()
+  $.post apiUri.apiTarget, args, "json"
+  .done (result) ->
+    console.info result
+    if result.is_good is true
+      if result.status is false
+        # Already validated
+        stopLoad()
+        try
+          toastStatusMessage "You're already verified"
+      else
+        # Somehow just validated????
+        stopLoad()
+        false
+    else
+      if result.status
+        # Sent email
+        # Put a form to fill
+        html = """
+        <div id='verify-email-filler' class='form row'>
+          <p class='col-xs-12'>We've sent you an email. <strong>Be sure to check your "junk" or "spam" folder for the request</strong>. Please click the link in the email, or paste the code provided into the box below.</p>
+          <div class='form-group col-xs-8'>
+            <label for='verify-email-code' class='sr-only'>Validation Code:</label>
+            <input class='form-control' type='text' maxlength='32' placeholder='Verification Code' id='verify-email-code' name='verify-email-code' required/>
+          </div>
+          <div class='col-xs-4'>
+            <button class='btn btn-primary' id='validate-email-code'>Validate Code</button>
+          </div>
+        </div>
+        """
+        $(caller).after html
+        $("#validate-email-code").click ->
+          selector = "#verify-email-code"
+          code = $().val().trim()
+          reqLength = $(selector).attr "maxlength"
+          reqLength = toInt reqLength
+          try
+            isValid = $(selector).get(0).checkValidity()
+          catch
+            isValid = true
+          if isNull(code) or not isValid or code.length isnt reqLength
+            $(selector).parent().addClass "has-error"
+            message = $(selector).get(0).validationMessage ? "Invalid Value"
+            $(selector)
+            .popover("destroy")
+            .attr "data-toggle", "popover"
+            .attr "title", "Error"
+            .attr "data-content", message
+            .attr "data-placement", "top"
+            .popover("show")
+            return false
+          $(selector).popover("destroy")
+          $(selector).parent().removeClass "has-error"
+          validateEmailCode()
+        stopLoad()
+      else
+        console.error result.error
+        try
+          stopLoadError result.human_error
+        catch
+          stopLoadError()
+          try
+            toastStatusMessage result.human_error
+    stopLoad()
+    false
+  .fail (result, status) ->
+    try
+      stopLoadError "Sorry, we couldn't verify your email at this time"
+    catch
+      stopLoadError()
+    false
+  false
+
+
+addAlternateEmail = (caller) ->
+  html = """
+  <div id='add-alternate-form' class='form row'>
+    <p class='col-xs-12'>An alternative email address can be used to meet verification requirements. We will not use this email for any other purpose.</p>
+    <div class='form-group col-xs-8'>
+      <label for='alternate-email-value' class='sr-only'>Alternative Email</label>
+      <input type='email' class='form-control' placeholder='Alternative email address' id='alternate-email-value' name='alternate-email-value' required/>
+    </div>
+    <div class='col-xs-4'>
+      <button class='btn btn-primary' id='submit-alternate-email'>Add</button>
+    </div>
+  </div>
+  """
+  $(caller).after html
+  $("#submit-alternate-email").click ->
+    selector = "#alternate-email-value"
+    email = $(selector).val().trim()
+    try
+      isValid = $(selector).get(0).checkValidity()
+    catch
+      isValid = true
+    if isNull(email) or not isValid
+      $(selector).parent().addClass "has-error"
+      message = $(selector).get(0).validationMessage ? "Invalid Value"
+      $(selector)
+      .popover("destroy")
+      .attr "data-toggle", "popover"
+      .attr "title", "Error"
+      .attr "data-content", message
+      .attr "data-placement", "top"
+      .popover("show")
+      return false
+    $(selector).popover("destroy")
+    $(selector).parent().removeClass "has-error"
+    startLoad()
+    # POST, etc
+    user = $(caller).attr "data-user"
+    args = "action=addalternateemail&email=#{encodeURIComponent(email)}&username=#{encodeURIComponent(user)}"
+    $.post apiUri.apiTarget, args, "json"
+    .done (result) ->
+      console.info result
+      if result.status isnt true
+        try
+          stopLoadError result.human_error
+        catch
+          stopLoadError()
+          console.error result.human_error
+        return false
+      try
+        toastStatusMessage "Added '#{email}' as an alternate email"
+      $("#add-alternate-form").remove()
+      html = """
+      #{email} <small>(check your email for a verification link)</small>
+      """
+      $(caller).html html
+      stopLoad()
+      false
+    .fail (result, status) ->
+      stopLoadError "Sorry, we couldn't assign your alternate email at this time"
+      false
+    false
+  false
+
+
 $ ->
   needStylesheetImport = true
   $("link[rel='stylesheet']").each ->
@@ -1131,6 +1334,14 @@ $ ->
   $(".do-password-reset").click ->
     resetPassword()
     false
+  $(".verify-email").click ->
+    parent = $(this).parent()
+    verifyEmail(parent)
+    false
+  $("#add-alternate").click ->
+    parent = $(this).parent()
+    addAlternateEmail(parent)
+    false
   try
     # Use the CDN out of an abundance of caution
     loadJS "https://maxcdn.bootstrapcdn.com/bootstrap/3.3.5/js/bootstrap.min.js", ->
@@ -1152,6 +1363,11 @@ $ ->
         $(".alert").alert()
       catch e
         console.warn("Couldn't bind alert!")
+      try
+        $("body").tooltip
+          selector: "[data-toggle='tooltip']"
+      catch e
+        console.warn("Tooltips were attempted to be set up, but do not exist")
   catch e
     console.log("Couldn't tooltip icon!")
   try
