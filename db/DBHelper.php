@@ -10,15 +10,15 @@ class DBHelper
     public function __construct($database, $user, $pw, $url = 'localhost', $table = null, $cols = null)
     {
         /***
-     * @param string $database the database to connect to
-     * @param string $user the username for the SQL database
-     * @param string $pw the password for $user in $database
-     * @param string $url the URL of the SQL server
-     * @param string $table the default table
-     * @param array $cols the column information. Note that it must be
-     * specified here in the constructor!!
-     ***/
-    $this->db = $database;
+         * @param string $database the database to connect to
+         * @param string $user the username for the SQL database
+         * @param string $pw the password for $user in $database
+         * @param string $url the URL of the SQL server
+         * @param string $table the default table
+         * @param array $cols the column information. Note that it must be
+         * specified here in the constructor!!
+         ***/
+        $this->db = $database;
         $this->SQLuser = $user;
         $this->pw = $pw;
         $this->url = $url;
@@ -105,7 +105,7 @@ class DBHelper
         return $this->link;
     }
 
-    private function invalidateLink() {
+    public function invalidateLink() {
         $this->setLink(null);
         return $this->openDB();
     }
@@ -139,13 +139,23 @@ class DBHelper
     public function getCols()
     {
         if (!is_array($this->cols)) {
-            throw(new Exception('Invalid columns'));
+            try {
+                $cols = array();
+                $query = "SHOW COLUMNS FROM `".$this->getTable()."`";
+                $result = mysqli_query($this->getLink(), $query);
+                while($row = mysqli_fetch_row($result)) {
+                    $cols[$row[0]] = $row[1];
+                }
+                $this->cols = $cols;
+            } catch (Exception $e) {
+                throw(new Exception('Invalid columns'));
+            }
         }
 
         return $this->cols;
     }
 
-    protected function testSettings($table = null, $detail = false)
+    public function testSettings($table = null, $detail = false)
     {
 
         if (!empty($table)) {
@@ -237,13 +247,18 @@ class DBHelper
             if (!$dirty_entities && json_encode(json_decode($input,true)) != $input) {
                 $input = htmlentities(self::cleanInput($input));
                 $input = str_replace('_', '&#95;', $input); // Fix _ potential wildcard
-            $input = str_replace('%', '&#37;', $input); // Fix % potential wildcard
-            $input = str_replace("'", '&#39;', $input);
+                $input = str_replace('%', '&#37;', $input); // Fix % potential wildcard
+                $input = str_replace("'", '&#39;', $input);
                 $input = str_replace('"', '&#34;', $input);
             }
             $output = mysqli_real_escape_string($this->getLink(), $input);
         }
-
+        # Handle it for up to six parts
+        $output = preg_replace('/^([a-zA-Z]+)&#95;([a-zA-Z]+)$/', '$1_$2', $output);
+        $output = preg_replace('/^([a-zA-Z]+)&#95;([a-zA-Z]+)&#95;([a-zA-Z]+)$/', '$1_$2_$3', $output);
+        $output = preg_replace('/^([a-zA-Z]+)&#95;([a-zA-Z]+)&#95;([a-zA-Z]+)&#95;([a-zA-Z]+)$/', '$1_$2_$3_$4', $output);
+        $output = preg_replace('/^([a-zA-Z]+)&#95;([a-zA-Z]+)&#95;([a-zA-Z]+)&#95;([a-zA-Z]+)&#95;([a-zA-Z]+)$/', '$1_$2_$3_$4_$5', $output);
+        $output = preg_replace('/^([a-zA-Z]+)&#95;([a-zA-Z]+)&#95;([a-zA-Z]+)&#95;([a-zA-Z]+)&#95;([a-zA-Z]+)&#95;([a-zA-Z]+)&#95;([a-zA-Z]+)$/', '$1_$2_$3_$4_$5_$6', $output);
         return $output;
     }
 
@@ -267,13 +282,14 @@ class DBHelper
             }
             $input = htmlentities(self::cleanInput($input, $strip_html));
             $input = str_replace('_', '&#95;', $input); // Fix _ potential wildcard
-        $input = str_replace('%', '&#37;', $input); // Fix % potential wildcard
-        $input = str_replace("'", '&#39;', $input);
+            $input = str_replace('%', '&#37;', $input); // Fix % potential wildcard
+            $input = str_replace("'", '&#39;', $input);
             $input = str_replace('"', '&#34;', $input);
+            $input = preg_replace('/^([a-zA-Z]+)&#95;([a-zA-Z]+)$/', '$1_$2', $input); # Allow simple underscores
             $output = self::mysql_escape_mimic($input);
         }
 
-        return $output;
+        return htmlspecialchars_decode(html_entity_decode($output));
     }
 
     public function openDB()
@@ -321,19 +337,19 @@ class DBHelper
             $field_name = $this->sanitize($field_name);
         }
 
-        if (false) {
-            #is_numeric($item))
-
-            $item_string = $item;
-        } else {
-            $item_string = "'$item'";
-        }
+        $item_string = "'$item'";
         $query = 'SELECT * FROM `'.$this->getTable()."` WHERE `$field_name`=".$item_string;
         try {
             $result = mysqli_query($this->getLink(), $query);
             if ($result === false) {
                 if ($test) {
-                    return array('status' => false,'query' => $query,'error' => 'false result');
+                    return array(
+                      'status' => false,
+                      'query' => $query,
+                      'error' => 'false result',
+                      "item" => $item,
+                      "column" => $field_name,
+                    );
                 }
 
                 return false;
@@ -392,16 +408,19 @@ class DBHelper
         return $rows[0];
     }
 
-    public function deleteRow($value, $field_name, $throw = false)
-    {
+    public function deleteRow($value, $field_name, $throw = false) {
         /***
-     * Deletes a row
-     *
-     * @param string $value match for $field_name = $value
-     * @param string $field_name column name
-     * @return array with result in "status"; if true, rows affected in "rows"; if false, error in "error"
-     ***/
-    $value = $this->sanitize($value);
+         * Deletes a row
+         *
+         * @param string $value match for $field_name = $value
+         * @param string $field_name column name
+         * @return array with result in "status"; if true, rows affected in "rows"; if false, error in "error"
+         ***/
+        if(is_array($value)) {
+            $field_name = key($value);
+            $value = current($value);
+        }
+        $value = $this->sanitize($value);
         $field_name = $this->sanitize($field_name);
 
         mysqli_query($this->getLink(), 'BEGIN');
@@ -411,23 +430,23 @@ class DBHelper
 
             return array('status' => true,'rows' => mysqli_affected_rows($this->getLink()));
         } else {
+            $error = mysqli_error($this->getLink());
             $r = mysqli_query($this->getLink(), 'ROLLBACK');
             if ($throw === true) {
                 throw(new Exception('Failed to delete row.'));
             }
 
-            return array('status' => false,'rollback_status' => $r,'error' => mysqli_error($this->getLink()));
+            return array('status' => false,'rollback_status' => $r,'error' => $error);
         }
     }
 
-    public function addItem($value_arr, $field_arr = null, $test = false, $precleaned = false)
-    {
+    public function addItem($value_arr, $field_arr = null, $test = false, $precleaned = false) {
         /***
-     *
-     * @param array $value_arr
-     * @param array $field_arr
-     ***/
-    $querystring = 'INSERT INTO `'.$this->getTable().'` VALUES (';
+         *
+         * @param array $value_arr
+         * @param array $field_arr
+         ***/
+        $querystring = 'INSERT INTO `'.$this->getTable().'` VALUES (';
         if (empty($field_arr)) {
             $temp = array();
             foreach ($value_arr as $k => $v) {
@@ -449,14 +468,14 @@ class DBHelper
             if ($item !== false) {
                 $source = mysqli_fetch_assoc($item);
             }
-        // Create blank, correctly sized entry
-        while ($i < sizeof($source)) {
-            $valstring .= "''";
-            if ($i < sizeof($source) - 1) {
-                $valstring .= ',';
+            // Create blank, correctly sized entry
+            while ($i < sizeof($source)) {
+                $valstring .= "''";
+                if ($i < sizeof($source) - 1) {
+                    $valstring .= ',';
+                }
+                ++$i;
             }
-            ++$i;
-        }
             $querystring .= "$valstring)";
             if ($test) {
                 $retval = $querystring;
@@ -482,7 +501,7 @@ class DBHelper
                 }
             }
             $equatestring = substr($equatestring, 0, -1); // remove trailing comma
-        $querystring .= "$equatestring WHERE id='";
+            $querystring .= "$equatestring WHERE id='";
             if ($test) {
                 $row = $this->getLastRowNumber() + 1;
                 $querystring .= "$row'";
@@ -510,27 +529,35 @@ class DBHelper
             return false;
         }
     }
-    
-    
+
+
 
     public function getQueryResults($search, $cols = '*', $boolean_type = 'AND', $loose = false, $precleaned = false, $order_by = false, $debug_query = false) {
         $this->invalidateLink();
         $result = $this->doQuery($search, $cols, $boolean_type, $loose, $precleaned, $order_by);
         $response = array();
-        while($row = mysqli_fetch_assoc($result)) {
-            $response[] = $row;
-        }
-        if(empty($response) && $debug_query) {
-            $debug = $this->doQuery($search, $cols, $boolean_type, $loose, $precleaned, $order_by, true);
-            $debug["result"] = $result;
-            return $debug;
+        try {
+            while($row = mysqli_fetch_assoc($result)) {
+                $response[] = $row;
+            }
+            if(empty($response) && $debug_query) {
+                $debug = $this->doQuery($search, $cols, $boolean_type, $loose, $precleaned, $order_by, true);
+                $debug["result"] = $result;
+                return $debug;
+            }
+        } catch (Exception $e) {
+            $response = array(
+                "status" => false,
+                "result_provided" => $result,
+                "error" => $e->getMessage(),
+            );
         }
         return $response;
     }
-    
-    
-    
-    
+
+
+
+
     public function doQuery($search, $cols = '*', $boolean_type = 'AND', $loose = false, $precleaned = false, $order_by = false, $debug_query = false)
     {
         /***
@@ -636,75 +663,86 @@ class DBHelper
 
     public function updateEntry($value, $unq_id, $field_name = null, $precleaned = false)
     {
-        /***
-     *
-     * @param string|array $value new value to fill $field_name, or column=>value pairs
-     * @param array $unq_id a 1-element array of col=>val to designate the matching criteria
-     * @param string|array $field_name column(s) to be updated
-     * @param bool $precleaned if the input elements have been presanitized
-     ***/
-    if (!is_array($unq_id)) {
+      /***
+       *
+       * @param string|array $value new value to fill $field_name, or column=>value pairs
+       * @param array $unq_id a 1-element array of col=>val to designate the matching criteria
+       * @param string|array $field_name column(s) to be updated
+       * @param bool $precleaned if the input elements have been presanitized
+       ***/
+      if (!is_array($unq_id)) {
         throw(new Exception('Invalid argument for unq_id'));
-    }
-        $column = key($unq_id);
-        $uval = current($unq_id);
-
-        if (!$this->is_entry($uval, $column, $precleaned)) {
-            throw(new Exception("No item '$uval' exists for column '$column' in ".$this->getTable()));
+      }
+      $column = key($unq_id);
+      $uval = current($unq_id);
+      $this->invalidateLink();
+      if (!$this->is_entry($uval, $column, $precleaned)) {
+        $debug = $this->is_entry($uval, $column, $precleaned, true);
+        $item = $debug["item"];
+        $field_name = $debug["column"];
+        throw(new Exception("No item '$item' exists for column '$field_name' in ".$this->getTable() . " (".$debug["query"].")"));
+      }
+      $values = array();
+      $method = "";
+      if (!empty($field_name)) {
+        if (is_array($field_name)) {
+          $method = "array field";
+          foreach ($field_name as $key) {
+            # Map each field name onto the value of the current value item
+            $item = current($value);
+            $key = $precleaned ? mysqli_real_escape_string($this->getLink(), $key) : $this->sanitize($key);
+            $values[$key] = $precleaned ? mysqli_real_escape_string($this->getLink(), $item) : $this->sanitize($item);
+            next($value);
+          }
+        } else {
+          # $field_name isn't an array. Let's make sure $value isn't
+          # either
+          $method = "string pair";
+          if (!is_array($value)) {
+            $key = $precleaned ? mysqli_real_escape_string($this->getLink(), $field_name) : $this->sanitize($field_name);
+            $values[$key] = $precleaned ? mysqli_real_escape_string($this->getLink(), $value) : $this->sanitize($value);
+          } else {
+            # Mismatched types
+            throw(new Exception("Mismatched types for \$value and \$field_name"));
+          }
         }
-
-        if (!empty($field_name)) {
-            $values = array();
-            if (is_array($field_name)) {
-                foreach ($field_name as $key) {
-                    # Map each field name onto the value of the current value item
-                $item = current($value);
-                    $key = $precleaned ? mysqli_real_escape_string($this->getLink(), $key) : $this->sanitize($key);
-                    $values[$key] = $precleaned ? mysqli_real_escape_string($this->getLink(), $item) : $this->sanitize($item);
-                    next($value);
-                }
-            } else {
-                # $field_name isn't an array. Let's make sure $value isn't either
-            if (!is_array($value)) {
-                $key = $precleaned ? mysqli_real_escape_string($this->getLink(), $field_name) : $this->sanitize($field_name);
-                $values[$key] = $precleaned ? mysqli_real_escape_string($this->getLink(), $value) : $this->sanitize($value);
-            } else {
-                # Mismatched types
-                throw(new Exception("Mismatched types for \$value and \$field_name"));
-            }
-            }
-        } elseif (empty($field_name)) {
-            # Make sure that $value is an array
+      } elseif (empty($field_name)) {
+        # Make sure that $value is an array
+        # Preferred way to input
+        $method = "array value";
         if (is_array($value) && is_string(key($value))) {
-            $values = array();
-            foreach ($value as $key => $value) {
-                $key = $precleaned ? mysqli_real_escape_string($this->getLink(), $key) : $this->sanitize($key);
-                $key = str_replace('&#95;', '_', $key);
-                $values[$key] = $precleaned ? mysqli_real_escape_string($this->getLink(), $value) : $this->sanitize($value);
-            }
+          $method = "array value match";
+          $this->invalidateLink();
+          foreach ($value as $key => $val) {
+            $key = $precleaned ?
+                 mysqli_real_escape_string($this->getLink(), $key) : $this->sanitize($key);
+            $values[$key] = $precleaned ?
+                          mysqli_real_escape_string($this->getLink(), $val) : $this->sanitize($val);
+          }
         } else {
-            throw(new Exception("No column found for \$value"));
+          throw(new Exception("No column found for \$value"));
         }
-        }
+      }
 
-        $sets = array();
-        foreach ($values as $col => $val) {
-            $sets[] = "`$col`=\"$val\"";
-        }
-        $set_string = implode(',', $sets);
-        $query = 'UPDATE `'.$this->getTable()."` SET $set_string WHERE `$column`='$uval'";
-        mysqli_query($this->getLink(), 'BEGIN');
-        $r = mysqli_query($this->getLink(), $query);
-        if ($r !== false) {
-            mysqli_query($this->getLink(), 'COMMIT');
+      $sets = array();
+      foreach ($values as $col => $val) {
+        $sets[] = "`".$col."`=\"".$val."\"";
+      }
+      $set_string = implode(',', $sets);
+      $query = 'UPDATE `'.$this->getTable()."` SET $set_string WHERE `$column`='$uval'";
+      $this->invalidateLink();
+      mysqli_query($this->getLink(), 'BEGIN');
+      $r = mysqli_query($this->getLink(), $query);
+      if ($r !== false) {
+        mysqli_query($this->getLink(), 'COMMIT');
 
-            return true;
-        } else {
-            $error = mysqli_error($this->getLink())." - for $query";
-            mysqli_query($this->getLink(), 'ROLLBACK');
+        return true;
+      } else {
+        $error = mysqli_error($this->getLink())." - for $query (basis: ".print_r($values, true)."; method = $method)";
+        mysqli_query($this->getLink(), 'ROLLBACK');
 
-            return $error;
-        }
+        return $error;
+      }
     }
 
 
@@ -720,7 +758,7 @@ class DBHelper
         return (mysqli_num_rows($result)) ? TRUE : FALSE;
     }
 
-    protected function addColumn($columnName, $columnType = null) {
+    public function addColumn($columnName, $columnType = null) {
         /***
          * Add a new column. DATA MUST BE SANITIZED BEFORE CALLING!
          *
@@ -758,4 +796,7 @@ class DBHelper
             "status" => true,
         );
     }
+    
+    
+    
 }
