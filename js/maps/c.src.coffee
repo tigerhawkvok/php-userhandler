@@ -1672,7 +1672,7 @@ verifyEmail = (caller) ->
         $(caller).after html
         $("#validate-email-code").click ->
           selector = "#verify-email-code"
-          code = $().val().trim()
+          code = $(selector).val().trim()
           reqLength = $(selector).attr "maxlength"
           reqLength = toInt reqLength
           try

@@ -1801,7 +1801,7 @@
           $("#validate-email-code").click(function() {
             var code, isValid, message, ref, reqLength, selector;
             selector = "#verify-email-code";
-            code = $().val().trim();
+            code = $(selector).val().trim();
             reqLength = $(selector).attr("maxlength");
             reqLength = toInt(reqLength);
             try {
